@@ -1,0 +1,4 @@
+﻿import fs from 'node:fs';
+for(const name of ['shared','customer-chat','agent-console']){const f=`src/components/${name}.tsx`;let s=fs.readFileSync(f,'utf8').replaceAll('\uFEFF','');if(name!=='shared')s=s.replace('import { cn } from "@/lib/utils";\n"use client";','"use client";\nimport { cn } from "@/lib/utils";');fs.writeFileSync(f,s);}
+console.log(JSON.parse(fs.readFileSync('artifacts/tailwind-before/login-1440.json','utf8'))[0].style.fontFamily);
+for(const f of fs.readdirSync('.next/dev/static/chunks').filter(f=>f.endsWith('.css.map'))){const m=JSON.parse(fs.readFileSync('.next/dev/static/chunks/'+f,'utf8'));for(let i=0;i<(m.sources||[]).length;i++)if(m.sources[i].includes('globals.css')){fs.writeFileSync('artifacts/original-globals.txt',m.sourcesContent[i]);console.log('Recovered original CSS',f,m.sourcesContent[i].length);}}

@@ -1,0 +1,6 @@
+﻿import fs from 'node:fs';import ts from 'typescript';
+const M=JSON.parse(fs.readFileSync('artifacts/utility-map.json','utf8'));
+const excluded=new Set(['active','selected','checked','choice-selected','details-hidden','assumed','mobile-chat-open','four','chat-new','chat-consult']);
+const files=['shared','customer-chat','agent-console','login','profile'];
+for(const name of files){const f=`src/components/${name}.tsx`;let s=fs.readFileSync(f,'utf8');const tree=ts.createSourceFile(f,s,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);const edits=[];
+function visit(n){if(ts.isJsxOpeningElement(n)||ts.isJsxSelfClosingElement(n)){const a=n.attributes.properties.find(a=>ts.isJsxAttribute(a)&&a.name.text==='className');if(a?.initializer){const strings=[];const scan=x=>{if(ts.isStringLiteral(x))strings.push(x.text);ts.forEachChild(x,scan)};scan(a.initializer);const keys=Object.keys(M).filter(k=>!excluded.has(k)&&M[k]&&strings.slice(0,1).some(v=>v.includes(M[k])));if(strings.some(v=>v.startsWith('group/message ')))keys.push('agent-message');if(keys.length)edits.push([n.attributes.pos,` data-visual="${[...new Set(keys)].join(' ')}"`]);}}ts.forEachChild(n,visit);}visit(tree);for(const[pos,text]of edits.sort((a,b)=>b[0]-a[0]))s=s.slice(0,pos)+text+s.slice(pos);fs.writeFileSync(f,s);}

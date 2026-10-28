@@ -1,0 +1,2 @@
+﻿import fs from 'node:fs';
+for(const f of fs.readdirSync('.next/dev/static/chunks').filter(f=>f.endsWith('.css.map'))){const m=JSON.parse(fs.readFileSync('.next/dev/static/chunks/'+f,'utf8'));console.log(f,Object.keys(m),m.sources?.slice(0,3),m.sections?.length);const scan=x=>{for(let i=0;i<(x.sources||[]).length;i++)if(x.sources[i].includes('globals.css')){fs.writeFileSync('artifacts/original-globals.txt',x.sourcesContent[i]);console.log('RECOVERED',x.sourcesContent[i].length);}for(const z of x.sections||[])scan(z.map);};scan(m);}
