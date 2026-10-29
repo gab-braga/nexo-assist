@@ -40,8 +40,10 @@ export function useConversationWorkspace({
     text: string;
     conversationId: string;
   } | null>(null);
+
   const [creationId, setCreationId] = useState<string | null>(null);
   const base = user.role === "agent" ? "/agent" : "/chat";
+
   function href(changes: Record<string, string | null>) {
     const params = new URLSearchParams({ search, status });
     if (conversation) params.set("conversation", conversation._id);
@@ -51,6 +53,7 @@ export function useConversationWorkspace({
     }
     return `${base}?${params}`;
   }
+
   useEffect(() => {
     const timer = setInterval(() => {
       if (!document.hidden && !pending && !older)
@@ -58,6 +61,7 @@ export function useConversationWorkspace({
     }, 10000);
     return () => clearInterval(timer);
   }, [router, pending, older]);
+
   function create(event: React.FormEvent) {
     event.preventDefault();
     setError("");
@@ -74,6 +78,7 @@ export function useConversationWorkspace({
       router.push(href({ conversation: result.data._id, cursor: null }));
     });
   }
+
   function send(event: React.FormEvent) {
     event.preventDefault();
     if (!conversation) return;
@@ -98,6 +103,7 @@ export function useConversationWorkspace({
       router.refresh();
     });
   }
+
   function change(operation: "assume" | "release" | "close") {
     if (!conversation) return;
     setError("");
@@ -111,10 +117,12 @@ export function useConversationWorkspace({
       router.refresh();
     });
   }
+
   const canReply =
     conversation &&
     conversation.status !== "closed" &&
     (user.role === "chat" || conversation.agentId === user.uid);
+
   return {
     pending,
     error,

@@ -6,6 +6,7 @@ export function canReadConversation(
 ) {
   return user.role === "agent" || conversation.customerId === user.uid;
 }
+
 export function canSendMessage(user: SessionUser, conversation: Conversation) {
   return (
     canReadConversation(user, conversation) &&

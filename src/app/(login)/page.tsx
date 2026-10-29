@@ -1,11 +1,14 @@
 import Image from "next/image";
 import { LoginForm } from "./components/login-form";
 import { Status } from "@/components/status";
-const loginDemo = {
+
+const LoginDemo = {
   question: "Meu notebook não conecta na VPN. Erro 809.",
-  answer: "Converse com a equipe de TI e acompanhe seu atendimento por aqui.",
-  ticket: "Atendimento",
-};
+  answer:
+    "Pronto: abri o chamado com prioridade alta. Um analista fala com você em até 4 h úteis.",
+  ticket: "INC-20517",
+} as const;
+
 import { getSession } from "@/auth/session";
 import { redirect } from "next/navigation";
 
@@ -42,8 +45,9 @@ export default async function LoginPage() {
             data-visual="story-description"
             className="text-[16px] leading-6.25 text-[#b5b9bf] max-w-127 mt-6.25 max-[800.001px]:text-[14px] max-[800.001px]:leading-5.75 max-[540.001px]:mt-5"
           >
-            Descreva o que está acontecendo. Converse com a equipe de TI e
-            acompanhe o histórico dos seus atendimentos.
+            Descreva o que está acontecendo. O assistente consulta seus
+            chamados, busca na central de ajuda e chama um analista quando
+            precisa.
           </p>
           <div
             data-visual="story-demo"
@@ -53,23 +57,24 @@ export default async function LoginPage() {
               data-visual="demo-user"
               className="bg-card text-[#1c2633] rounded-[12px_12px_3px_12px] py-2 px-3.25 w-fit ml-auto"
             >
-              {loginDemo.question}
+              {LoginDemo.question}
             </div>
             <p>
-              Nexo Assist <span>suporte de TI · atendimento</span>
+              Nexo Assist{" "}
+              <span>consultou seus chamados · criou um chamado</span>
             </p>
             <div
               data-visual="demo-answer"
               className="py-2.5 px-3.5 bg-[#ffffff16] rounded-[0_13px_13px_13px] max-w-95 leading-5.25"
             >
-              {loginDemo.answer}
+              {LoginDemo.answer}
             </div>
             <div
               data-visual="demo-ticket"
               className="flex gap-2 items-center bg-card text-muted-foreground rounded-xl py-1.5 px-3 mt-1.5 w-fit text-[12px] *:data-[slot=status]:text-[#1c2633] *:data-[slot=status]:font-semibold"
             >
-              <Status color="amber">{loginDemo.ticket}</Status>
-              <span>Rede e VPN · Suporte de TI</span>
+              <Status color="amber">{LoginDemo.ticket}</Status>
+              <span>Rede e VPN · Alta · em até 4 h</span>
             </div>
           </div>
         </div>

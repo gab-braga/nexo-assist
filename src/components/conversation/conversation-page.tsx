@@ -11,9 +11,11 @@ import type { UserRole } from "@/types/domain";
 export type ConversationSearch = Promise<
   Record<string, string | string[] | undefined>
 >;
+
 function value(input: string | string[] | undefined) {
   return typeof input === "string" ? input : "";
 }
+
 function cursor(input: string) {
   if (!input) return undefined;
   try {
@@ -23,19 +25,19 @@ function cursor(input: string) {
   }
 }
 
-export async function ConversationPage({
-  role,
-  searchParams,
-}: {
+type Props = {
   role: UserRole;
   searchParams: ConversationSearch;
-}) {
+};
+
+export async function ConversationPage({ role, searchParams }: Props) {
   const user = await protectPage(role);
   const params = await searchParams;
   const search = value(params.search);
   const status = value(params.status) || "all";
   const id = value(params.conversation);
   const before = value(params.before);
+
   const data = await result(async () => {
     const [list, conversation, history] = await Promise.all([
       listConversations({
@@ -48,6 +50,7 @@ export async function ConversationPage({
     ]);
     return { list, conversation, history };
   });
+
   if (!data.ok)
     return (
       <main className="p-8">
@@ -61,6 +64,7 @@ export async function ConversationPage({
         </a>
       </main>
     );
+
   return (
     <ConversationWorkspace
       key={id}

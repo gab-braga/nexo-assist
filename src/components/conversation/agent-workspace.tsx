@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -27,35 +28,42 @@ import {
   useConversationWorkspace,
   type WorkspaceProps,
 } from "./use-conversation-workspace";
+
+const colors = { waiting: "amber", active: "blue", closed: "gray" };
+
 const names = {
   waiting: "Aguardando atendente",
   active: "Em atendimento",
   closed: "Encerrado",
 };
-const colors = { waiting: "amber", active: "blue", closed: "gray" };
+
 const initials = (name: string) =>
   name
     .split(" ")
     .map((part) => part[0])
     .slice(0, 2)
     .join("");
+
 const time = (date: string) =>
   new Date(date).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "America/Sao_Paulo",
   });
+
 const date = (value: string) =>
   new Date(value).toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "short",
     timeZone: "America/Sao_Paulo",
   });
+
 const subscribeMobile = (notify: () => void) => {
   const query = window.matchMedia("(max-width: 650px)");
   query.addEventListener("change", notify);
   return () => query.removeEventListener("change", notify);
 };
+
 export function AgentWorkspace(props: WorkspaceProps) {
   const { user, list, conversation, history, search, status, older } = props;
   const {
@@ -69,21 +77,25 @@ export function AgentWorkspace(props: WorkspaceProps) {
     canReply,
     navigate,
   } = useConversationWorkspace(props);
+
   const [mobileChat, setMobileChat] = useState(Boolean(conversation));
   const [details, setDetails] = useState(true);
   const [menu, setMenu] = useState(false);
   const [close, setClose] = useState(false);
   const [all, setAll] = useState(false);
   const [mobileDetails, setMobileDetails] = useState(false);
+
   const isMobile = useSyncExternalStore(
     subscribeMobile,
     () => window.matchMedia("(max-width: 650px)").matches,
     () => false,
   );
+
   const visibleDetails = details && (!isMobile || mobileDetails);
   const assumed =
     conversation?.status === "active" && conversation.agentId === user.uid;
   const closed = conversation?.status === "closed";
+
   return (
     <main
       data-visual="agent-console"
@@ -640,7 +652,7 @@ function AgentMessage({
       )}
       <div
         data-visual="message-bubble"
-        className="flow-root whitespace-pre-wrap break-words bg-card rounded-[4px_13px_13px_13px] py-2 px-3 text-[14px] shadow-[0_1px_2px_#23304708] group-data-[from=ai]/message:bg-[#e5effb] group-data-[from=ai]/message:rounded-[13px_4px_13px_13px] group-data-[from=ai]/message:min-w-0 group-data-[from=agent]/message:bg-[#e2f3e9] group-data-[from=agent]/message:rounded-[13px_4px_13px_13px] max-[800.001px]:text-[12px] max-[800.001px]:leading-4.75"
+        className="flow-root whitespace-pre-wrap wrap-break-word bg-card rounded-[4px_13px_13px_13px] py-2 px-3 text-[14px] shadow-[0_1px_2px_#23304708] group-data-[from=ai]/message:bg-[#e5effb] group-data-[from=ai]/message:rounded-[13px_4px_13px_13px] group-data-[from=ai]/message:min-w-0 group-data-[from=agent]/message:bg-[#e2f3e9] group-data-[from=agent]/message:rounded-[13px_4px_13px_13px] max-[800.001px]:text-[12px] max-[800.001px]:leading-4.75"
       >
         <span>{text}</span>
         <span

@@ -29,7 +29,7 @@ export function Shell({ children, user }: Props) {
         data-visual="customer-sidebar"
         className="fixed inset-y-0 left-0 z-10 flex w-58 flex-col border-r border-border bg-card pt-4.75 px-3.5 pb-5.25 [&>a]:mx-2 [&>a]:mb-5 [&>a]:text-[16px] [&>nav]:flex [&>nav]:flex-col [&>nav]:gap-0.5 [&>nav>a]:h-9 [&>nav>a]:rounded-lg [&>nav>a]:flex [&>nav>a]:items-center [&>nav>a]:gap-2.5 [&>nav>a]:px-2.5 [&>nav>a]:text-[13px] [&>nav>a]:text-[#344156] [&>nav_svg]:size-4 [&>nav_svg]:stroke-[1.6] max-[800.001px]:w-45 max-[800.001px]:pt-4.5 max-[800.001px]:px-2.5 max-[800.001px]:[&>a]:text-[14px] max-[800.001px]:[&>a]:gap-1.25 max-[800.001px]:[&>a>b]:text-[25px] max-[540.001px]:w-15.5 max-[540.001px]:pt-5 max-[540.001px]:px-2 max-[540.001px]:[&>a>span]:text-[0px] max-[540.001px]:[&>a>span]:gap-0 max-[540.001px]:[&>a]:mx-auto max-[540.001px]:[&>a]:mb-6 max-[540.001px]:[&>nav>a]:text-[0px] max-[540.001px]:[&>nav>a]:gap-0 max-[540.001px]:[&>nav>a]:justify-center max-[540.001px]:[&>nav_svg]:size-4.75"
       >
-        <div className="flex gap-2.5 items-center mb-5.5">
+        <div className="flex gap-2.5 items-center mb-5.5 px-3">
           <Image
             src="/nexo-assist-dark.svg"
             width={20}
@@ -38,13 +38,15 @@ export function Shell({ children, user }: Props) {
           />
           <span className="text-lg font-bold text-nowrap">Nexo Assist</span>
         </div>
+
         <nav>
           {links.map((link) => (
             <Link
               key={link.label}
               className={cn(
                 "cursor-pointer [-webkit-tap-highlight-color:transparent] focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3 text-inherit no-underline",
-                link.to === pathname &&
+                active &&
+                  active.to === link.to &&
                   "[&&]:text-primary [&&]:bg-secondary [&&]:font-medium",
               )}
               href={link.to}
@@ -54,6 +56,7 @@ export function Shell({ children, user }: Props) {
             </Link>
           ))}
         </nav>
+
         <div
           data-visual="sidebar-bottom"
           className="group/account mt-auto border-t border-border pt-3.25 px-2 [&>a]:flex [&>a]:items-center [&>a]:gap-2.75 [&>a]:text-[13px] [&>a]:mt-3 [&>a]:text-[#344156] max-[800.001px]:pl-0.5 max-[540.001px]:pt-3 max-[540.001px]:[&>a]:hidden"
@@ -87,6 +90,7 @@ export function Shell({ children, user }: Props) {
           </form>
         </div>
       </aside>
+
       <div
         data-visual="customer-main"
         className="ml-58 w-[calc(100%-232px)] max-[800.001px]:ml-45 max-[800.001px]:w-[calc(100%-180px)] max-[540.001px]:ml-15.5 max-[540.001px]:w-[calc(100%-62px)]"

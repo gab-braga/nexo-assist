@@ -79,7 +79,7 @@ export function LoginForm() {
       onSubmit={submit}
     >
       <h2>Entrar</h2>
-      <p>Use a conta fornecida pela TI.</p>
+      <p>Use seu e-mail corporativo e a senha da rede Nexo.</p>
       {message && (
         <div role="status" className="mb-4 text-sm">
           {message}

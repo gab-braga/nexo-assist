@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -9,24 +10,29 @@ import {
   useConversationWorkspace,
   type WorkspaceProps,
 } from "./use-conversation-workspace";
+
 const names = {
   waiting: "Aguardando atendente",
   active: "Em atendimento",
   closed: "Encerrado",
 };
+
 const colors = { waiting: "amber", active: "blue", closed: "gray" };
+
 const time = (date: string) =>
   new Date(date).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "America/Sao_Paulo",
   });
+
 const date = (value: string) =>
   new Date(value).toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "short",
     timeZone: "America/Sao_Paulo",
   });
+
 export function ChatWorkspace(props: WorkspaceProps) {
   const { user, list, conversation, history, search, status, older } = props;
   const {
@@ -46,6 +52,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
   const [mode, setMode] = useState<"new" | "consult">(
     conversation ? "consult" : "new",
   );
+
   return (
     <main
       data-visual="customer-chat"
@@ -285,7 +292,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
                       className="ml-auto mb-4.75 w-fit max-w-130 bg-[#1c2633] text-white py-3 px-4 rounded-[12px_12px_3px_12px] leading-5.25 min-h-10.75 group-data-[mode=new]/chat:w-130 max-[800.001px]:max-w-[90%] max-[800.001px]:group-data-[mode=new]/chat:w-fit max-[540.001px]:text-[12px] max-[540.001px]:leading-4.75 max-[540.001px]:mb-3.75 min-[801px]:group-data-[mode=new]/chat:nth-3:pr-15"
                       key={message._id}
                     >
-                      <p className="whitespace-pre-wrap break-words">
+                      <p className="whitespace-pre-wrap wrap-break-word">
                         {message.text}
                       </p>
                       <small className="text-[10px] opacity-70">
@@ -305,7 +312,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
                         data-visual="assistant-bubble"
                         className="max-w-150.25 border border-border rounded-[4px_13px_13px_13px] py-3 px-3.75 leading-5.5 [&>strong]:block [&>strong]:mt-2.5 [&>strong]:mb-2 [&>strong]:font-semibold group-data-[mode=new]/chat:py-2.5 max-[800.001px]:text-[13px] max-[540.001px]:p-2.5 max-[540.001px]:text-[12px] max-[540.001px]:leading-5"
                       >
-                        <p className="whitespace-pre-wrap break-words">
+                        <p className="whitespace-pre-wrap wrap-break-word">
                           {message.text}
                         </p>
                         <small className="text-[10px] text-muted-foreground">
