@@ -130,6 +130,7 @@ export async function createConversation(input: unknown) {
     createdAt: now,
     updatedAt: now,
     version: 0,
+    aiEnabled: true,
   });
   return getConversation(data.requestId);
 }

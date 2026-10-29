@@ -22,6 +22,7 @@ async function main() {
       ["tickets", { customerId: 1, status: 1, resolvedAt: -1 }],
       ["ticket_events", { ticketId: 1, createdAt: 1, _id: 1 }],
       ["ticket_drafts", { customerId: 1, expiresAt: 1 }],
+      ["agent_runs", { conversationId: 1, createdAt: -1 }],
     ] as const;
     for (const [collection, index] of indexes) {
       await db.collection(collection).createIndex({ ...index });

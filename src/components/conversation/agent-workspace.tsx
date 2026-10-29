@@ -374,7 +374,13 @@ export function AgentWorkspace(props: WorkspaceProps) {
               key={message._id}
               text={message.text}
               time={time(message.createdAt)}
-              from={message.role === "chat" ? "user" : "agent"}
+              from={
+                message.role === "chat"
+                  ? "user"
+                  : message.role === "assistant"
+                    ? "ai"
+                    : "agent"
+              }
               author={message.authorName}
             />
           ))}

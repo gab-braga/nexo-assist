@@ -112,7 +112,7 @@ export async function transitionRecord(
       const { conversations, events } = await conversationCollections();
       const updated = await conversations.updateOne(
         filter,
-        { $set: update, $inc: { version: 1 } },
+        { $set: update, $inc: { version: 1, aiControlVersion: 1 } },
         { session },
       );
       if (updated.modifiedCount !== 1)

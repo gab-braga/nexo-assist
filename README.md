@@ -1,8 +1,10 @@
 # Nexo Assist
 
-O serviço de chamados da Fase 2 está documentado em [docs/fase-2-servico-de-chamados.md](docs/fase-2-servico-de-chamados.md), incluindo confirmação, regras de prazo, operações, seed e verificações. A integração com IA permanece para a próxima fase.
+O serviço de chamados da Fase 2 está documentado em [docs/fase-2-servico-de-chamados.md](docs/fase-2-servico-de-chamados.md), incluindo confirmação, regras de prazo, operações, seed e verificações.
 
-Atendimentos de TI com Next.js 16 App Router, Firebase Authentication e Firestore Enterprise com compatibilidade MongoDB. O domínio contém conversas, mensagens e eventos de atendimento. Integrações de IA e de service desk externo ficam para uma etapa posterior.
+O núcleo de IA da Fase 3 usa Mastra e OpenAI no servidor, com streaming no chat existente. Consulte [configuração, ferramentas, limites, testes e pendências](docs/fase-3-agente-mastra.md). Defina `OPENAI_API_KEY` e, opcionalmente, `NEXO_AI_MODEL` no ambiente local. O fluxo visual completo de confirmação e a memória avançada permanecem para as próximas fases.
+
+Atendimentos de TI com Next.js 16 App Router, Firebase Authentication e Firestore Enterprise com compatibilidade MongoDB. O domínio contém conversas, mensagens, chamados e eventos de atendimento, com agente Mastra no servidor e serviço de chamados simulado persistido. Integração com service desk externo fica para uma etapa posterior.
 
 ## Configuração
 

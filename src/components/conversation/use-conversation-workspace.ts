@@ -15,7 +15,8 @@ import {
   sendMessage,
   transitionConversation,
 } from "@/server/actions/conversations";
-import type { ConversationDTO, SessionUser } from "@/types/domain";
+import type { ConversationDTO, MessageDTO, SessionUser } from "@/types/domain";
+import { AgentStreamError, consumeAgentStream } from "@/lib/agent-stream";
 import type {
   listConversations,
   getMessages,
@@ -41,6 +42,7 @@ export function useConversationWorkspace({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [streamMessages, setStreamMessages] = useState<MessageDTO[]>([]);
   const messageForm = useForm<MessageFormValues>({
     resolver: zodResolver(MessageFormSchema),
     defaultValues: { text: "" },
@@ -103,6 +105,82 @@ export function useConversationWorkspace({
         : { id: crypto.randomUUID(), text, conversationId: conversation._id };
     setRequest(next);
     startTransition(async () => {
+      if (
+        user.role === "chat" &&
+        conversation.aiEnabled &&
+        !conversation.aiHandoff &&
+        conversation.status === "waiting"
+      ) {
+        const timestamp = new Date().toISOString();
+        const previewId = `stream-${next.id}`;
+        setStreamMessages([
+          {
+            _id: next.id,
+            conversationId: conversation._id,
+            authorId: user.uid,
+            authorName: user.name,
+            role: "chat",
+            text: next.text,
+            createdAt: timestamp,
+          },
+          {
+            _id: previewId,
+            conversationId: conversation._id,
+            authorId: "nexo-assist",
+            authorName: "Nexo Assist",
+            role: "assistant",
+            text: "Processando sua mensagem…",
+            createdAt: timestamp,
+          },
+        ]);
+        let streamed = "";
+        try {
+          const response = await fetch("/api/agent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              requestId: next.id,
+              conversationId: conversation._id,
+              text: next.text,
+            }),
+          });
+          await consumeAgentStream(response, (event) => {
+            if (event.type === "delta") {
+              streamed += event.text;
+              setStreamMessages((messages) =>
+                messages.map((message) =>
+                  message._id === previewId
+                    ? { ...message, text: streamed }
+                    : message,
+                ),
+              );
+            } else if (event.type === "completed")
+              setStreamMessages((messages) =>
+                messages.map((message) =>
+                  message._id === previewId ? event.message : message,
+                ),
+              );
+          });
+          messageForm.reset();
+          setRequest(null);
+        } catch (failure) {
+          setError(
+            failure instanceof Error
+              ? failure.message
+              : "Não foi possível concluir o atendimento.",
+          );
+          setStreamMessages([]);
+          // Terminal failures need a new explicit attempt; uncertain network
+          // outcomes retain the ID to reconcile rather than repeat execution.
+          if (
+            failure instanceof AgentStreamError &&
+            failure.code !== "RUN_IN_PROGRESS"
+          )
+            setRequest(null);
+        }
+        router.refresh();
+        return;
+      }
       const result = await sendMessage({
         requestId: next.id,
         text: next.text,
@@ -140,6 +218,7 @@ export function useConversationWorkspace({
   return {
     pending,
     error,
+    streamMessages,
     text,
     messageForm,
     createForm,

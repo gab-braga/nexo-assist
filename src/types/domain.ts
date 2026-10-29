@@ -20,6 +20,11 @@ export type Conversation = {
   createdAt: Date;
   updatedAt: Date;
   version: number;
+  aiEnabled?: boolean;
+  aiHandoff?: boolean;
+  aiMessageCount?: number;
+  aiActiveRunId?: string | null;
+  aiControlVersion?: number;
 };
 
 export type Message = {
@@ -27,7 +32,7 @@ export type Message = {
   conversationId: string;
   authorId: string;
   authorName: string;
-  role: UserRole;
+  role: UserRole | "assistant";
   text: string;
   createdAt: Date;
 };

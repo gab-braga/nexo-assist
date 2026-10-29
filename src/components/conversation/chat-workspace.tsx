@@ -42,6 +42,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
   const {
     pending,
     error,
+    streamMessages,
     text,
     messageForm,
     createForm,
@@ -52,6 +53,12 @@ export function ChatWorkspace(props: WorkspaceProps) {
     canReply,
     navigate,
   } = useConversationWorkspace(props);
+  const visibleMessages = [
+    ...(history?.items ?? []),
+    ...streamMessages.filter(
+      (message) => !history?.items.some((saved) => saved._id === message._id),
+    ),
+  ];
   const [mode, setMode] = useState<"new" | "consult">(
     conversation ? "consult" : "new",
   );
@@ -197,7 +204,11 @@ export function ChatWorkspace(props: WorkspaceProps) {
                       {item.subject}
                     </span>
                     <Status color={colors[item.status]}>
-                      {names[item.status]}
+                      {item.aiEnabled &&
+                      !item.aiHandoff &&
+                      item.status === "waiting"
+                        ? "Nexo Assist"
+                        : names[item.status]}
                     </Status>
                     <small className="text-[12px] text-muted-foreground">
                       {date(item.createdAt)}
@@ -247,12 +258,19 @@ export function ChatWorkspace(props: WorkspaceProps) {
                       >
                         <span>Atendimento</span>
                         <Status color={colors[conversation.status]}>
-                          {names[conversation.status]}
+                          {conversation.aiEnabled &&
+                          !conversation.aiHandoff &&
+                          conversation.status === "waiting"
+                            ? "Nexo Assist"
+                            : names[conversation.status]}
                         </Status>
                       </div>
                       <h2>{conversation.subject}</h2>
                       <p>
-                        {conversation.agentName || "Aguardando um atendente"}
+                        {conversation.agentName ||
+                          (conversation.aiEnabled && !conversation.aiHandoff
+                            ? "Atendimento com Nexo Assist"
+                            : "Aguardando um atendente")}
                       </p>
                     </div>
                   </section>
@@ -273,7 +291,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
                     Mensagens anteriores
                   </Link>
                 )}
-                {history?.items.map((message) =>
+                {visibleMessages.map((message) =>
                   message.role === "chat" ? (
                     <div
                       data-visual="customer-bubble"
@@ -310,7 +328,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
                     </div>
                   ),
                 )}
-                {!history?.items.length && (
+                {!visibleMessages.length && (
                   <p className="text-sm text-muted-foreground">
                     Envie uma mensagem para começar.
                   </p>
