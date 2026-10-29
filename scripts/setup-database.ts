@@ -16,6 +16,12 @@ async function main() {
       ["messages", { _id: 1 }],
       ["messages", { conversationId: 1, createdAt: -1, _id: -1 }],
       ["conversation_events", { conversationId: 1, createdAt: -1 }],
+      ["tickets", { customerId: 1, updatedAt: -1, _id: -1 }],
+      ["tickets", { status: 1, updatedAt: -1, _id: -1 }],
+      ["tickets", { customerId: 1, status: 1, nextResponseDueAt: 1 }],
+      ["tickets", { customerId: 1, status: 1, resolvedAt: -1 }],
+      ["ticket_events", { ticketId: 1, createdAt: 1, _id: 1 }],
+      ["ticket_drafts", { customerId: 1, expiresAt: 1 }],
     ] as const;
     for (const [collection, index] of indexes) {
       await db.collection(collection).createIndex({ ...index });

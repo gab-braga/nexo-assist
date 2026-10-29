@@ -1,5 +1,7 @@
 # Nexo Assist
 
+O serviço de chamados da Fase 2 está documentado em [docs/fase-2-servico-de-chamados.md](docs/fase-2-servico-de-chamados.md), incluindo confirmação, regras de prazo, operações, seed e verificações. A integração com IA permanece para a próxima fase.
+
 Atendimentos de TI com Next.js 16 App Router, Firebase Authentication e Firestore Enterprise com compatibilidade MongoDB. O domínio contém conversas, mensagens e eventos de atendimento. Integrações de IA e de service desk externo ficam para uma etapa posterior.
 
 ## Configuração
@@ -60,12 +62,12 @@ As ações usam a proteção de origem e Host do Next.js. Mantenha a configuraç
 
 ## Dados e arquitetura
 
-- `src/actions`: Server Actions de autenticação e mutações, com resultados padronizados.
+- `src/server/actions`: Server Actions de autenticação e mutações, com resultados padronizados.
 - `src/auth`: sessão, guards e políticas de acesso.
-- `src/services`: validação Zod e regras de negócio.
-- `src/repositories`: consultas e persistência transacional.
-- `src/schemas` e `src/types`: entradas e contratos.
-- `src/lib`: integrações privilegiadas, conexão e tratamento de erros.
+- `src/server/services`: validação Zod e regras de negócio.
+- `src/server/repositories`: consultas e persistência transacional.
+- `src/server/schemas`, `src/lib/schemas` e `src/types`: entradas e contratos.
+- `src/server/lib`: integrações privilegiadas, conexão e tratamento de erros.
 
 Coleções: `users`, `conversations`, `messages` e `conversation_events`. As roles são autoritativas no Firebase, não no perfil salvo no banco. Datas são BSON Date e chegam à interface como ISO. Mensagens são documentos separados do atendimento.
 

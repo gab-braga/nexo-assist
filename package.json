@@ -12,7 +12,9 @@
     "test:forms": "node tests/forms-check.mjs",
     "db:setup": "node --conditions=react-server --import tsx scripts/setup-database.ts",
     "auth:role": "node scripts/set-role.mjs",
-    "test:backend": "node --conditions=react-server --import tsx --test tests/backend.test.ts",
+    "test:backend": "node --conditions=react-server --import tsx --test tests/backend.test.ts tests/tickets.test.ts",
+    "test:tickets:database": "node --conditions=react-server --import tsx tests/tickets-database.ts",
+    "db:seed": "node --conditions=react-server --import tsx scripts/seed-service-desk.ts",
     "test:database": "node --conditions=react-server --import tsx tests/database-integration.ts",
     "test:integration": "node tests/interface-check.mjs --cloud"
   },
