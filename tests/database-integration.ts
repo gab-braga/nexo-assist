@@ -84,7 +84,18 @@ async function main() {
       1,
     );
     assert.equal(
-      await collections.events.countDocuments({ conversationId: id }),
+      await collections.events.countDocuments({
+        conversationId: id,
+        operation: "assume",
+      }),
+      1,
+    );
+    assert.equal(
+      await collections.events.countDocuments({
+        conversationId: id,
+        operation: "human_message",
+        messageId,
+      }),
       1,
     );
     const active = (await findConversation(id))!;

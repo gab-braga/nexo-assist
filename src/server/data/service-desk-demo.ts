@@ -1,5 +1,7 @@
 import { ticketDeadline, ticketPriority } from "@/server/policies/tickets";
 import type { KnowledgeArticle, Ticket, TicketData } from "@/types/tickets";
+import type { Conversation, Message } from "@/types/domain";
+import { buildHandoffSummary } from "@/server/policies/handoff";
 
 export const demoEmployees = [
   {
@@ -13,6 +15,78 @@ export const demoEmployees = [
     email: "bruno@nexo-demo.example.test",
   },
 ];
+
+export const demoAnalysts = [
+  {
+    uid: "nexo-demo-analyst-1",
+    name: "Carla Demonstração",
+    email: "carla@nexo-demo.example.test",
+  },
+];
+export const demoIdentities = [
+  ...demoEmployees.map((employee) => ({ ...employee, role: "chat" as const })),
+  ...demoAnalysts.map((analyst) => ({ ...analyst, role: "agent" as const })),
+];
+
+/** Fixed identities and IDs make reruns additive, never replacements. */
+export function demoConversations(now: Date) {
+  const tickets = demoTickets(now);
+  const conversations: Conversation[] = [
+    "IA",
+    "Fila humana",
+    "Atendimento humano",
+    "Encerrado",
+  ].map((name, index) => {
+    const owner = demoEmployees[index === 3 ? 1 : 0];
+    const createdAt = new Date(now.getTime() - (index + 1) * 3600000);
+    const id = `dc000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
+    const conversation: Conversation = {
+      _id: id,
+      customerId: owner.uid,
+      customerName: owner.name,
+      subject: `Demonstração: ${name}`,
+      status: index === 3 ? "closed" : index === 2 ? "active" : "waiting",
+      agentId: index === 2 ? demoAnalysts[0].uid : null,
+      agentName: index === 2 ? demoAnalysts[0].name : null,
+      aiEnabled: true,
+      aiHandoff: index > 0,
+      aiControlVersion: 0,
+      aiMessageCount: 0,
+      version: 1,
+      createdAt,
+      updatedAt: createdAt,
+      initialMessageId: `dd000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      ...(index < 3
+        ? { selectedTicketId: tickets[index === 2 ? 1 : 0]._id }
+        : {}),
+      ...(index === 2 ? { assignedAt: createdAt.toISOString() } : {}),
+      ...(index === 3 ? { closedAt: createdAt.toISOString() } : {}),
+    };
+    if (index > 0)
+      conversation.handoff = {
+        id: `demo-handoff-${index}`,
+        reason: "requested",
+        requestedAt: createdAt.toISOString(),
+        summary: buildHandoffSummary(
+          conversation,
+          "Cenário fictício criado pelo seed para demonstrar a navegação e o atendimento humano.",
+        ),
+      };
+    return conversation;
+  });
+  const messages: Message[] = conversations.map((conversation) => ({
+    _id: conversation.initialMessageId!,
+    conversationId: conversation._id,
+    authorId: conversation.customerId,
+    authorName: conversation.customerName,
+    role: "chat",
+    text: "Este é um atendimento fictício de demonstração. Preciso de ajuda com meu equipamento.",
+    createdAt: conversation.createdAt,
+    sequence: 1,
+    processingState: "completed",
+  }));
+  return { conversations, messages };
+}
 
 export const demoArticles: KnowledgeArticle[] = [
   {

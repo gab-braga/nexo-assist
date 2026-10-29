@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { initializeApp, cert, applicationDefault } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import nextEnv from "@next/env";
+nextEnv.loadEnvConfig(process.cwd());
 
 // Trusted administrative CLI. Deliberately not exposed as a Server Action.
 async function main() {

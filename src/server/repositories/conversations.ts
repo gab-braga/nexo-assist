@@ -14,6 +14,7 @@ import {
 } from "@/server/policies/handoff";
 import { conversationState } from "@/auth/conversation-state";
 import type { Db } from "mongodb";
+import { recordHumanServiceResponse } from "./tickets";
 
 type ConversationEvent = {
   _id: string;
@@ -100,6 +101,7 @@ export async function appendMessage(
         );
         authorize(conversation, existing);
         if (existing) return;
+        await recordHumanServiceResponse(db, conversation!, message, session);
         await messages.insertOne(
           {
             ...message,
@@ -156,49 +158,43 @@ export async function pauseConversationAgent(
 ) {
   const now = new Date();
   if (conversation.aiActiveRunId) {
-    await db
-      .collection<AgentRun>("agent_runs")
-      .updateOne(
-        {
-          _id: conversation.aiActiveRunId,
-          conversationId: conversation._id,
-          state: "running",
+    await db.collection<AgentRun>("agent_runs").updateOne(
+      {
+        _id: conversation.aiActiveRunId,
+        conversationId: conversation._id,
+        state: "running",
+      },
+      {
+        $set: {
+          state: "interrupted",
+          errorCode: "HUMAN_CONTROL",
+          completedAt: now,
         },
-        {
-          $set: {
-            state: "interrupted",
-            errorCode: "HUMAN_CONTROL",
-            completedAt: now,
-          },
+      },
+      { session },
+    );
+    await db.collection<Message>("messages").updateOne(
+      { _id: conversation.aiActiveRunId, conversationId: conversation._id },
+      {
+        $set: {
+          processingState: "interrupted",
+          processingErrorCode: "HUMAN_CONTROL",
         },
-        { session },
-      );
-    await db
-      .collection<Message>("messages")
-      .updateOne(
-        { _id: conversation.aiActiveRunId, conversationId: conversation._id },
-        {
-          $set: {
-            processingState: "interrupted",
-            processingErrorCode: "HUMAN_CONTROL",
-          },
-        },
-        { session },
-      );
+      },
+      { session },
+    );
   }
   if (conversation.pendingDraftId)
-    await db
-      .collection<TicketDraft>("ticket_drafts")
-      .updateOne(
-        {
-          _id: conversation.pendingDraftId,
-          customerId: conversation.customerId,
-          appliedAt: null,
-          cancelledAt: null,
-        },
-        { $set: { cancelledAt: now } },
-        { session },
-      );
+    await db.collection<TicketDraft>("ticket_drafts").updateOne(
+      {
+        _id: conversation.pendingDraftId,
+        customerId: conversation.customerId,
+        appliedAt: null,
+        cancelledAt: null,
+      },
+      { $set: { cancelledAt: now } },
+      { session },
+    );
 }
 
 export async function applyConversationTransition(

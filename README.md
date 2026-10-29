@@ -1,52 +1,57 @@
 # Nexo Assist
 
-No chat do funcionário, “Meus atendimentos” abre o histórico em um modal com título, última interação, status e prévia da mensagem. A lista carrega dez conversas por página e permite retomar o mesmo atendimento com IA ou analista; conversas encerradas permanecem disponíveis somente para consulta. A abertura do histórico não cria registros. Valide esse fluxo com `npm run test:history:ui` usando o servidor local e o Chrome.
+Assistente de service desk de TI: o funcionário conversa para consultar a central de ajuda, encontrar seus chamados, preparar aberturas, complementar ou reabrir chamados e pedir atendimento humano. O analista recebe o contexto, assume, responde e devolve à IA ou encerra. Ações verificáveis aparecem acima das respostas e permanecem no histórico.
 
-O atendimento humano da [Fase 6](docs/fase-6-handoff-atendimento-humano.md) integra transferência, pausa da IA, resumo no console, atribuição, mensagens humanas, devolução à IA e encerramento seguro na conversa existente.
+O serviço de chamados é **simulado e persistido**, separado do agente; não integra um legado externo. Firebase Authentication e Firestore Enterprise são reais. As suítes comuns usam um provedor de modelo simulado para evitar chamadas pagas.
 
-O serviço de chamados da Fase 2 está documentado em [docs/fase-2-servico-de-chamados.md](docs/fase-2-servico-de-chamados.md), incluindo confirmação, regras de prazo, operações, seed e verificações.
+## Execução local
 
-O núcleo de IA da Fase 3 usa Mastra e OpenAI no servidor, com streaming no chat existente. Consulte [configuração, ferramentas e limites](docs/fase-3-agente-mastra.md). Defina `OPENAI_API_KEY` e, opcionalmente, `NEXO_AI_MODEL` no ambiente local. A [Fase 4](docs/fase-4-memoria-persistencia.md) mantém memória e histórico persistentes. A [Fase 5](docs/fase-5-fluxos-inteligentes.md) integra coleta, consulta/seleção, rascunho, confirmação explícita, atualização, reabertura e cancelamento ao chat.
-
-O chat inicia diretamente pelo campo de mensagem: Enter envia e Shift + Enter insere uma quebra de linha. A primeira mensagem válida cria conversa, mensagem e execução em uma única transação; o título é um resumo determinístico de até dez palavras/80 caracteres, sem chamada adicional ao modelo. Abrir a tela ou selecionar “Novo atendimento” não cria registros. Reenvios de resultado incerto preservam os mesmos UUIDs para recuperar o resultado sem duplicar a conversa ou processar a mensagem novamente.
-
-Atendimentos de TI com Next.js 16 App Router, Firebase Authentication e Firestore Enterprise com compatibilidade MongoDB. O domínio contém conversas, mensagens, chamados e eventos de atendimento, com agente Mastra no servidor e serviço de chamados simulado persistido. Integração com service desk externo fica para uma etapa posterior.
-
-## Configuração
-
-Requer Node.js 22.23 ou superior compatível, npm e uma service account com acesso ao projeto.
+Ambiente validado: Node.js **22.23.1**, npm **12.0.2** e Chrome para os testes de navegador. `.nvmrc` registra o Node utilizado. Use um projeto Firebase de desenvolvimento/demonstração; não execute seed ou testes em produção.
 
 ```sh
-npm install
+npm ci
 ```
 
-Copie `.env.example` para `.env.local`. A configuração local foi obtida do projeto `nexo-assist`, banco `nexo-assist-db`, região `nam5`. `.env.local` e `service-account.json` são ignorados pelo Git.
+Se o PowerShell bloquear `npm.ps1`, use `npm.cmd` nos mesmos comandos, sem alterar a política de execução. Copie `.env.example` para `.env.local`:
 
-- `GOOGLE_APPLICATION_CREDENTIALS`: caminho do JSON administrativo, disponível somente no servidor.
-- Alternativa para hospedagem: `FIREBASE_SERVICE_ACCOUNT_JSON` ou Application Default Credentials com identidade de serviço.
-- `MONGODB_URI`: endpoint com UID e localização do banco, sem senha. A autenticação usa Google OAuth via callback OIDC do driver MongoDB oficial, com renovação de tokens.
-- `MONGODB_DATABASE`: ID do banco.
-- `FIREBASE_PROJECT_ID`: projeto do servidor.
-- `NEXT_PUBLIC_FIREBASE_*`: configuração pública do aplicativo web Firebase. Nunca colocar a chave privada nessas variáveis.
+| Variável | Responsabilidade |
+| --- | --- |
+| `FIREBASE_PROJECT_ID` | Projeto do servidor |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Caminho local do JSON administrativo, fora do Git e de `public/` |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Alternativa server-only para hospedagem, JSON em uma linha |
+| `MONGODB_URI`, `MONGODB_DATABASE` | Endpoint/ID do Firestore Enterprise com API MongoDB |
+| `NEXT_PUBLIC_FIREBASE_*` | Configuração pública do aplicativo web, definida antes do build |
+| `OPENAI_API_KEY` | Credencial do modelo, somente no servidor |
+| `NEXO_AI_MODEL` | Modelo OpenAI configurável; padrão: `gpt-5.4-mini` |
+| `NEXO_DEMO_PASSWORD` | Senha local das contas fictícias, mínimo de 12 caracteres |
+| `TICKET_SERVICE_UNAVAILABLE_UNTIL` | Opcional: instante ISO futuro para simular indisponibilidade |
 
-O banco exige TLS, modo load balanced e `retryWrites=false`. O módulo de conexão aplica essas opções e reutiliza o pool por processo. A identidade da aplicação precisa de `roles/datastore.user`. Para preparar índices, a conta administrativa precisa também de `roles/datastore.indexAdmin` ou permissão equivalente. Em produção, separe a identidade administrativa da identidade da aplicação.
+Não envie chaves pelo chat nem as coloque em variáveis `NEXT_PUBLIC_`. `.env.local` e `service-account.json` são ignorados pelo Git. Sem arquivo/JSON explícito, o servidor aceita Application Default Credentials. O navegador não acessa o banco diretamente.
+
+No Firebase Console, habilite Authentication com E-mail/senha, registre o aplicativo web e autorize o domínio local. O banco precisa ser **Firestore Enterprise com API MongoDB**, não Firestore Standard. A conexão usa TLS, `loadBalanced=true`, `retryWrites=false`, `authSource=$external` e OAuth/OIDC com renovação de tokens.
+
+A identidade de execução precisa de acesso ao Firestore (`roles/datastore.user`) e às operações de Authentication usadas para verificar usuários/sessões, criar sessão e revogar sessões. A identidade administrativa de preparação precisa também criar índices e gerenciar contas fictícias. Separe essas identidades na hospedagem.
 
 ```sh
 npm run db:setup
+npm run db:seed
+# O comando anterior é dry run: não grava nada.
+# Defina NEXO_DEMO_PASSWORD em .env.local; aplique somente em ambiente de demo:
+npm run db:seed -- --apply
 npm run dev
 ```
 
-### Pendências verificadas na infraestrutura
+Abra `http://localhost:3000`. Não existe cadastro público. O seed prepara:
 
-O aplicativo web `Nexo Assist Web` foi registrado no projeto existente. Authentication precisa ser ativado no Firebase Console → Authentication → Começar, com E-mail/senha habilitado. A ativação programática via Identity Platform retornou `BILLING_NOT_ENABLED`; nenhum faturamento foi alterado.
+| Conta fictícia | Role | Destino |
+| --- | --- | --- |
+| `ana@nexo-demo.example.test` | Funcionária | `/chat` |
+| `bruno@nexo-demo.example.test` | Funcionário | `/chat` |
+| `carla@nexo-demo.example.test` | Analista | `/agent` |
 
-A conexão e os testes de escrita e transação no banco real passaram. A criação de índices retornou falta de `datastore.indexes.create`. Após conceder a permissão à conta administrativa, execute `npm run db:setup` e acompanhe a disponibilidade dos índices no console. Consultas sem índices adequados podem exigir varreduras e ter custo e latência maiores.
+Use a senha definida em `NEXO_DEMO_PASSWORD`; não há senha padrão ou senha livre. Reexecuções preservam senhas, claims e documentos. O seed recusa colisões de identidade/proprietário e não adota contas existentes pelo e-mail. São seis artigos, seis chamados variados e quatro conversas fictícias nos estados IA/fila/humano/encerrado. Datas são relativas à **primeira** aplicação; repetir o seed não renova chamados nem reabre atendimentos utilizados.
 
-`node scripts/discover-cloud.mjs` consulta os recursos e prepara `.env.local` quando ele não existe. `--configure` também registra um aplicativo web e tenta habilitar Authentication. O script preserva um `.env.local` existente e não imprime tokens ou chaves privadas.
-
-## Contas e autorização
-
-A TI cria os usuários no Firebase Authentication. Não há cadastro público nem endpoint de atribuição de role. Após criar a conta, atribua a claim em um terminal administrativo:
+Para contas criadas manualmente no Firebase, atribua a claim em terminal administrativo:
 
 ```sh
 npm run auth:role -- FIREBASE_UID chat
@@ -54,68 +59,104 @@ npm run auth:role -- FIREBASE_UID agent
 npm run auth:role -- FIREBASE_UID remove
 ```
 
-O comando preserva outras claims e revoga sessões. O usuário deve entrar novamente após a alteração. Não copie o JSON administrativo para `public/`, para o navegador ou para o repositório. Em produção, prefira uma identidade de serviço com privilégio mínimo.
+O comando preserva outras claims e revoga sessões; entre novamente após mudar a role. O auxiliar histórico `scripts/discover-cloud.mjs` não é necessário para executar; `--configure` altera recursos externos e não deve ser usado sem essa intenção.
 
-- `/`: login com e-mail e senha e recuperação pelo Firebase. Usuários autenticados vão para o ambiente de sua role.
-- `/chat`: cliente inicia atendimentos, consulta seu histórico e envia mensagens.
-- `/profile`: dados da própria conta e solicitação de redefinição de senha.
-- `/agent`: todos os atendentes acompanham todas as conversas. Somente o responsável atual responde, devolve à fila ou encerra. A atribuição é atômica.
-- Contas sem role válida são recusadas. Clientes não acessam agent; atendentes não acessam chat ou profile.
+## Tecnologias e arquitetura
 
-A sessão usa cookie HttpOnly, SameSite=Lax e Secure em produção. “Manter conectado” cria uma sessão de cinco dias; sem a opção, o cookie é de sessão e a credencial expira em oito horas. O SDK cliente usa apenas memória, sem persistir tokens em localStorage ou IndexedDB. Login exige autenticação recente. Cada operação valida sessão, revogação e claims atuais.
+Next.js 16.4.3 App Router, React 19, TypeScript strict, Tailwind CSS, shadcn/ui, Lucide, Zod, Firebase Authentication, Firestore Enterprise/MongoDB, Mastra 1.80.0 e SDK OpenAI. O `package-lock.json` fixa a instalação.
 
-Logout revoga as sessões Firebase do usuário em todos os dispositivos e remove o cookie local. Se o provedor estiver indisponível, o cookie local ainda é removido. Mudanças de role invalidam o acesso da sessão antiga e exigem novo login.
+```text
+src/app/                      páginas Server Components, layouts e POST /api/agent
+src/components/conversation/ chat, console, histórico, rascunhos e ações
+src/auth/                     sessão, guards, acesso e estados operacionais
+src/server/actions/           adaptadores autenticados para a interface
+src/server/services/          casos de uso, validação e confirmação
+src/server/repositories/      consultas, transações, versões e recibos
+src/server/policies/          prioridade, calendário, busca e projeção segura
+src/server/ai/                Mastra, ferramentas, contexto, memória e streaming
+src/server/lib/               Firebase Admin, pool MongoDB e erros
+src/server/data/              fixtures fictícias reproduzíveis
+src/server/schemas/           entradas do servidor
+src/lib/schemas/, src/types/  contratos públicos e tipos
+tests/, scripts/              testes e preparação administrativa
+```
 
-As ações usam a proteção de origem e Host do Next.js. Mantenha a configuração de proxy e Host correta na hospedagem e use HTTPS em produção. Google fica para a etapa de integração de identidade corporativa.
+Fluxo: formulário → Route Handler autenticado → criação/reserva transacional de conversa, mensagem e execução → memória autorizada → Mastra → ferramentas → serviços determinísticos → repositories. Resposta e ações usam a mesma conexão NDJSON. Server Components recuperam o histórico; Client Components cuidam das interações. Server Actions transportam confirmação e atendimento humano.
 
-## Dados e arquitetura
+Coleções: `users`, `conversations`, `messages`, `conversation_events`, `tickets`, `ticket_events`, `ticket_drafts`, `ticket_customer_locks`, `knowledge_articles` e `agent_runs`. O estado operacional deriva dos campos existentes: `AGENT_ACTIVE`, `WAITING_FOR_ANALYST`, `ANALYST_ACTIVE`, `CLOSED`. Versões e transações protegem atribuição, mensagens, propostas e operações. O banco é a fonte persistente do histórico.
 
-- `src/server/actions`: Server Actions de autenticação e mutações, com resultados padronizados.
-- `src/auth`: sessão, guards e políticas de acesso.
-- `src/server/services`: validação Zod e regras de negócio.
-- `src/server/repositories`: consultas e persistência transacional.
-- `src/server/schemas`, `src/lib/schemas` e `src/types`: entradas e contratos.
-- `src/server/lib`: integrações privilegiadas, conexão e tratamento de erros.
+## Decisões do agente e proteções
 
-Coleções: `users`, `conversations`, `messages` e `conversation_events`. As roles são autoritativas no Firebase, não no perfil salvo no banco. Datas são BSON Date e chegam à interface como ISO. Mensagens são documentos separados do atendimento.
+Mastra atende à preferência do desafio e oferece ferramentas tipadas, etapas, cancelamento e streaming sem servidor adicional. OpenAI é o provedor único já integrado; o SDK suporta ferramentas e respostas em streaming. O modelo é configurável para equilibrar qualidade, latência e custo. Esta entrega não apresenta comparação de preços ou benchmark entre provedores.
 
-Estados: `waiting` → `active` → `closed`; `active` → `waiting` devolve à fila. Encerramentos preservam mensagens. A versão do documento impede conflitos de atribuição; transações mantêm mensagem ou evento e conversa consistentes. UUIDs permitem repetir requisições sem duplicar mensagens ou atendimentos. A autorização sempre verifica o recurso existente.
+O modelo interpreta intenção e propõe tipo, categoria, impacto e urgência. Deve perguntar o que falta e consultar fontes reais. Ferramentas não recebem identidade do cliente/modelo: o contexto confiável liga funcionário, conversa e execução e verifica autenticação, controle humano e limites. Artigos, histórico e descrições são dados, nunca instruções privilegiadas.
 
-Leituras iniciais acontecem em Server Components; filtros e paginação usam a URL e consultas no servidor. Listas têm até 20 itens por página; históricos, 50 mensagens. A interface atualiza a cada dez segundos enquanto a aba está visível e exibe mensagens recentes. A busca literal por assunto e nome pode exigir varreduras. Presença, contagem de não lidas e respostas de IA não são simuladas.
+Permanecem determinísticos: autorização, campos obrigatórios, prioridade, calendário, reabertura, candidatos, verificação final de duplicidade, confirmação, escrita, idempotência e transições. O modelo não possui ferramenta para confirmar operações. O funcionário revisa o card e clica **Confirmar operação**; “sim” em texto livre não escreve. A confirmação vincula dono, conversa, rascunho, digest e controle. Resultado e recibo são atômicos; replay recupera o resultado.
 
-## Memória e persistência do agente
+A busca de artigos usa palavras, normalização de acentos e um pequeno vocabulário explícito de termos relacionados, sem busca vetorial. Retorna somente artigos existentes. Procedimentos restritos a Windows 10 são omitidos para Windows 11 ou ambiente desconhecido, sem inventar instruções.
 
-Consulte [Fase 4 — Conversas, memória e persistência](docs/fase-4-memoria-persistencia.md) para os contratos, recuperação de interrupções, interpretação do limite de 30 mensagens e testes.
+A memória usa mensagem inicial, janela recente e referências autorizadas de chamado, rascunho, coleta e resumo humano, com orçamento de 16 mil caracteres. Não duplica mensagens no storage Mastra. Novo envio invalida uma proposta anterior não aplicada; dados coletados podem preparar uma revisão, mas a confirmação antiga não é reutilizada.
 
-## Validação
+Limites por execução: seis etapas, oito ferramentas, 2.048 tokens de saída e 60 segundos. São até 30 mensagens aceitas pela IA por conversa; replay não conta novamente e mensagens humanas não consomem o limite. O título vem da primeira mensagem sem outra chamada ao modelo. Abrir novo atendimento não cria documentos.
 
-A [Fase 7 — Transparência e observabilidade](docs/fase-7-transparencia-observabilidade.md) descreve a auditoria incremental, as ações no chat e no console, a integração nativa com Mastra e os testes específicos.
+## Regras de negócio
+
+`INC` representa falha; `REQ`, pedido de acesso, equipamento ou software. Categorias: Acesso, Rede e VPN, Hardware, Software, E-mail e Outros. O afetado vem da autenticação.
+
+| Prioridade | Condição considerada | SLA de resposta/atualização |
+| --- | --- | --- |
+| Crítica | Equipe/empresa impedida | 1 hora corrida, 24/7 |
+| Alta | Pessoa impedida ou compromisso no mesmo dia | 4 horas úteis |
+| Média | Existe alternativa | 3 dias úteis |
+| Baixa | Sem urgência | 5 dias úteis |
+
+Calendário: segunda a sexta, **08h–18h de São Paulo (UTC−03)**, sem feriados; dia útil de dez horas. O cálculo preserva minutos/milissegundos e atravessa fins de semana. SLA não é promessa de resolução. Abertura/reabertura iniciam prazo. A resposta humana ligada ao chamado selecionado registra atualização do serviço, prazo e histórico com a mensagem. Complementos do funcionário não adiam o SLA; mudança de prioridade recalcula desde a última resposta do serviço. Resolvidos não ficam vencidos.
+
+Duplicidade compara dono, tipo, categoria e título normalizado; chamado aberto não deve gerar outra abertura. A checagem final acontece sob lock do funcionário. É uma heurística lexical, sem garantia semântica para todo enunciado. Reabertura exige resolução há no máximo sete dias corridos, inclusive a fronteira, revalidada na confirmação.
+
+Handoff ocorre por solicitação, criticidade, vencimento ou incerteza. A IA pausa, sua execução é invalidada e a fila recebe contexto. Somente o analista atribuído responde, devolve ou encerra; analistas autorizados consultam o console. Ao devolver, a IA aguarda nova mensagem e recupera o contexto humano. Encerrar conversa não resolve automaticamente chamado.
+
+## Transparência, segurança e falhas
+
+`agent_runs.audit` registra início/resultado de ferramentas, UUID, sequência, duração e fatos limitados. Ações aparecem acima da resposta e têm detalhes expansíveis; o console acrescenta métricas permitidas. Interpretações do modelo, regras e resultados têm origens distintas. Confirmação e handoff vêm dos recibos existentes. Não há justificativa posterior gerada por LLM nem exposição de chain-of-thought.
+
+Falha ao registrar o início impede a ferramenta. Resultado não confirmável aparece como **desconhecido**, nunca sucesso presumido. Quedas/expiração preservam histórico e não repetem escritas automaticamente. Reenvios incertos mantêm IDs para consultar o mesmo resultado. Falha de leitura da auditoria preserva mensagens com aviso.
+
+Sessão: cookie HttpOnly, SameSite=Lax, Secure em produção, revogação e claims atuais verificadas no servidor. “Manter conectado” dura cinco dias; sem a opção, cookie de sessão com credencial de oito horas. O SDK cliente guarda autenticação em memória, sem token em localStorage. Funcionários acessam somente seus recursos. Server Actions têm proteção de origem do Next; a rota do agente exige Origin correspondente, JSON e corpo de até 20 KB.
+
+Logs omitem corpos de erros e saídas sensíveis. Auditoria usa campos permitidos e redação de padrões de segredo. O conteúdo da conversa é enviado ao provedor para responder: não insira segredos nas mensagens. Isso não substitui política organizacional de privacidade/retenção.
+
+## Testes e qualidade
 
 ```sh
 npm run typecheck
 npm run lint
+npm run test:unit
+npm run test:database:all
 npm run build
-npm run test:backend
-npm run test:database
+npm run start -- -p 3100
+# Em outro terminal, mantendo esse servidor:
+npm run test:e2e
 ```
 
-`test:backend` verifica isolamento, políticas de resposta e encerramento e limites de entrada. `test:database` utiliza o banco configurado, cria registros temporários com UUID próprio, verifica persistência, idempotência, concorrência e transações, e remove os registros do teste.
+O E2E usa `http://localhost:3100`; configure `TEST_BASE_URL` para outra instância local. Exige Chrome, Authentication ativo e permissões administrativas de teste. Banco/E2E criam namespaces UUID e contas temporárias, removidos ao finalizar; não aplicam o seed permanente.
 
-Com o servidor em execução na porta 3000 e Chrome instalado:
+`test:unit` cobre regras, ferramentas, memória, permissões, confirmação, falhas, transparência e ciclos de imports. Sete suítes de banco verificam transações, concorrência, recuperação em processo separado e seed idempotente. E2E valida login real, chat, consulta/atualização, handoff, histórico e progresso incremental com **LLM simulado**, preservando Firebase, banco, serviços e renderização reais. O runner retorna erro se qualquer suíte falhar.
 
-```sh
-npm run test:ui
-npm run test:integration
-```
+Teste pago separado e explícito: `npm run test:agent:live`. Não integra as suítes comuns e não foi executado nesta fase. Decisões de um modelo real continuam probabilísticas. O lint mantém dois avisos históricos em `artifacts/`, sem erros na aplicação.
 
-`test:ui` verifica rotas anônimas, cookie forjado, ausência de credenciais preenchidas, recuperação e layout do login. `test:integration` exige Authentication ativo e acesso administrativo: cria contas temporárias e testa login, isolamento entre clientes, acesso cruzado entre roles, mensagens persistidas, observação por outro atendente, encerramento, claims alteradas e logout. Remove contas e dados ao terminar. Use `TEST_BASE_URL` para outro endereço local.
+## Demonstração, deploy e limitações
 
-A verificação completa de autenticação depende da ativação externa de Authentication. O lint apresenta dois avisos preexistentes nos scripts históricos de `artifacts/`.
+Consulte o [roteiro de 5–10 minutos](docs/demo.md), os [passos para deploy futuro](docs/deploy.md) e o [relatório de conformidade](docs/final-report.md). **Nenhum deploy foi realizado nesta fase.** É necessário runtime Node, saída de rede para Firebase/Firestore/OpenAI e streaming; exportação estática ou Edge não substituem esse servidor.
 
-## Restauração visual
+Limitações conhecidas:
 
-Os componentes de apresentação foram recuperados do commit `74ee161` e adaptados aos atendimentos persistidos. A autenticação, os guards e a camada de dados permanecem separados da interface.
+- Busca e duplicidade lexicais, com resultados limitados; sem avaliação do modelo real ou garantia semântica universal nesta fase.
+- Calendário sem feriados; seed envelhece; o limite de 30 conta mensagens aceitas pela IA na conversa persistida.
+- Contexto/páginas limitados; buscas podem exigir varreduras. Índices da futura hospedagem precisam de conferência administrativa.
+- Sem isolamento por equipe entre analistas, legado externo, retenção automática ou exportador de traces configurado. Correlação/métricas não significam coletor externo habilitado.
+- Antes de exposição pública: limitar tráfego/custo por usuário e proxy, definir orçamento do provedor e verificar timeout/streaming da plataforma. Limite por conversa não substitui proteção global contra abuso.
 
-Após gerar o build, execute `node tests/visual-restoration.mjs` para comparar login, perfil, chat e console do atendente em 390, 768 e 1440 px. O teste renderiza as versões do Git e as versões restauradas em um ambiente isolado com dados de apresentação, sem criar rotas de acesso alternativo à aplicação. As capturas e medidas ficam em `artifacts/visual-restoration/`. A largura móvel do console segue as capturas históricas, corrigindo o conflito entre as classes de grade legadas no Tailwind atual.
+Com mais tempo: avaliação rotulada com modelo real, busca/ranking ampliados, calendário corporativo, limites globais, retenção e monitoramento com privacidade.
 
-Nesta restauração, também passaram os testes completos com Firebase e Firestore reais, incluindo login, claims, isolamento entre clientes, mensagens, atribuição, encerramento e logout. Contas e registros temporários são removidos ao final.
+Histórico técnico: [Fase 2](docs/fase-2-servico-de-chamados.md), [Fase 3](docs/fase-3-agente-mastra.md), [Fase 4](docs/fase-4-memoria-persistencia.md), [Fase 5](docs/fase-5-fluxos-inteligentes.md), [Fase 6](docs/fase-6-handoff-atendimento-humano.md), [Fase 7](docs/fase-7-transparencia-observabilidade.md).

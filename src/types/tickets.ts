@@ -65,7 +65,7 @@ export type TicketEvent = {
   _id: string;
   ticketId: string;
   actorId: string;
-  operation: TicketOperation | "resolve";
+  operation: TicketOperation | "resolve" | "service_update";
   reason: string | null;
   before: Ticket | null;
   after: Ticket;

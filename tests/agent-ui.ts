@@ -45,9 +45,12 @@ async function main() {
     | "creation-failure"
     | "lose-response"
     | "model-failure"
+    | "lookup"
+    | "update"
     | "collect"
     | "draft" = "normal";
   let modelCalls = 0;
+  let selectedTicket: Ticket | null = null;
   const requests: AgentTurnInput[] = [];
   const conversationIds = new Set<string>();
   const ticketService = createTicketService({
@@ -85,48 +88,89 @@ async function main() {
                   },
                 ],
               ]
-            : mode === "collect"
+            : mode === "lookup"
               ? [
                   [
-                    toolCall("updateConversationFlow", {
-                      state: {
-                        intent: "create",
-                        stage: "collecting",
-                        data: {
-                          title: proposedData.title,
-                          type: proposedData.type,
-                          category: proposedData.category,
-                          impact: "person",
-                        },
-                        question: "Consegue trabalhar em outro equipamento?",
-                        choices: [
-                          {
-                            label: "Sem alternativa",
-                            message: "Não tenho alternativa para trabalhar.",
-                          },
-                          {
-                            label: "Tenho alternativa",
-                            message: "Consigo trabalhar com outro equipamento.",
-                          },
-                        ],
-                      },
-                      rationale: "Coletar urgência antes de propor prioridade.",
+                    toolCall("listUserTickets", {
+                      query: { status: "open" },
+                      rationale: "Consultar os chamados reais do funcionário.",
                     }),
                   ],
-                  textParts("Consegue trabalhar em outro equipamento?"),
+                  textParts("Selecione o chamado consultado."),
                 ]
-              : mode === "draft"
+              : mode === "update"
                 ? [
                     [
-                      toolCall("prepareTicketDraft", {
-                        change: { operation: "create", data: proposedData },
+                      toolCall("getTicketDetails", {
+                        ticketId: selectedTicket!._id,
                         rationale:
-                          "Dados completos para revisão do funcionário.",
+                          "Validar o chamado escolhido antes de atualizar.",
                       }),
                     ],
-                    textParts("Revise a proposta."),
+                    [
+                      toolCall("prepareTicketDraft", {
+                        change: {
+                          operation: "update",
+                          ticketId: selectedTicket!._id,
+                          version: selectedTicket!.version,
+                          data: {
+                            ...proposedData,
+                            description:
+                              "O problema começou após a atualização do sistema.",
+                          },
+                        },
+                        rationale:
+                          "Acrescentar o complemento mediante confirmação explícita.",
+                      }),
+                    ],
+                    textParts("Revise a atualização."),
                   ]
-                : [textParts(`Resposta ${modelCalls} em streaming.`)],
+                : mode === "collect"
+                  ? [
+                      [
+                        toolCall("updateConversationFlow", {
+                          state: {
+                            intent: "create",
+                            stage: "collecting",
+                            data: {
+                              title: proposedData.title,
+                              type: proposedData.type,
+                              category: proposedData.category,
+                              impact: "person",
+                            },
+                            question:
+                              "Consegue trabalhar em outro equipamento?",
+                            choices: [
+                              {
+                                label: "Sem alternativa",
+                                message:
+                                  "Não tenho alternativa para trabalhar.",
+                              },
+                              {
+                                label: "Tenho alternativa",
+                                message:
+                                  "Consigo trabalhar com outro equipamento.",
+                              },
+                            ],
+                          },
+                          rationale:
+                            "Coletar urgência antes de propor prioridade.",
+                        }),
+                      ],
+                      textParts("Consegue trabalhar em outro equipamento?"),
+                    ]
+                  : mode === "draft"
+                    ? [
+                        [
+                          toolCall("prepareTicketDraft", {
+                            change: { operation: "create", data: proposedData },
+                            rationale:
+                              "Dados completos para revisão do funcionário.",
+                          }),
+                        ],
+                        textParts("Revise a proposta."),
+                      ]
+                    : [textParts(`Resposta ${modelCalls} em streaming.`)],
         ),
         tools,
       );
@@ -488,6 +532,50 @@ async function main() {
     await expect(page.getByText(/Abertura confirmada:/)).toHaveCount(1);
     assert.equal(modelCalls, callsAfterConfirmation);
 
+    // Final delivery coverage: query and update through the actual chat UI,
+    // not only a service call. The existing description and deadline survive.
+    selectedTicket = savedTickets[0];
+    mode = "lookup";
+    await composer.fill("Quais são meus chamados abertos?");
+    await send.click();
+    await expect(
+      page.getByText("Selecione o chamado consultado.", { exact: true }),
+    ).toBeVisible();
+    mode = "update";
+    await composer.fill(
+      "Atualize o chamado do notebook: começou após a atualização do sistema.",
+    );
+    await send.click();
+    await expect(confirm).toBeEnabled({ timeout: 25000 });
+    await expect(draftCard).toContainText("após a atualização do sistema");
+    assert.equal(
+      (
+        await db
+          .collection<Ticket>("tickets")
+          .findOne({ _id: selectedTicket._id })
+      )?.version,
+      selectedTicket.version,
+    );
+    await confirm.click();
+    await expect(page.getByText(/Atualização confirmada:/)).toHaveCount(1, {
+      timeout: 25000,
+    });
+    const updatedTicket = await db
+      .collection<Ticket>("tickets")
+      .findOne({ _id: selectedTicket._id });
+    assert.ok(updatedTicket);
+    assert.ok(updatedTicket.description.startsWith(selectedTicket.description));
+    assert.ok(
+      updatedTicket.description.includes("após a atualização do sistema"),
+    );
+    assert.equal(
+      updatedTicket.nextResponseDueAt.toISOString(),
+      selectedTicket.nextResponseDueAt.toISOString(),
+    );
+    await page.reload();
+    await expect(page.getByText(/Atualização confirmada:/)).toHaveCount(1);
+    mode = "draft";
+
     await newConversation.click();
     await expect(composer).toHaveValue("");
     proposedData = {
@@ -522,7 +610,7 @@ async function main() {
     await expect(draftCard).toHaveCount(0);
     assert.deepEqual(errors, []);
     console.log(
-      "Chat UI passed: first-send/reload/failure regressions, persistent quick choices, responsive draft, server-confirmed operation, double-click protection, persisted receipt, reload without model invocation and cancellation.",
+      "Chat UI passed: first-send/reload/failure regressions, persistent quick choices, responsive draft, server-confirmed operation, double-click protection, persisted receipt, authorized lookup, confirmed update preserving history/SLA, reload without model invocation and cancellation.",
     );
   } catch (error) {
     if (diagnostic) console.error("Chat test diagnostic:", await diagnostic());

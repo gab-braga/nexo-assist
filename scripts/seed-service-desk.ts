@@ -2,11 +2,11 @@ import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
 async function main() {
-  const { demoEmployees, demoArticles, demoTickets } =
+  const { demoIdentities, demoArticles, demoTickets, demoConversations } =
     await import("../src/server/data/service-desk-demo");
   if (!process.argv.includes("--apply")) {
     console.log(
-      "Dry run: 2 funcionários, 6 artigos e 6 chamados. Nada gravado. Use --apply e NEXO_DEMO_PASSWORD para criar contas Firebase de demonstração.",
+      "Dry run: 2 funcionários, 1 analista, 6 artigos, 6 chamados e 4 conversas. Nada gravado. Use --apply e NEXO_DEMO_PASSWORD somente em ambiente de demonstração.",
     );
     return;
   }
@@ -21,13 +21,13 @@ async function main() {
     const auth = getAdminAuth();
     // Preflight all fixed identities before any write. Never adopt an existing
     // account or alter its password/claims based only on its email/UID.
-    for (const employee of demoEmployees) {
+    for (const employee of demoIdentities) {
       try {
         const user = await auth.getUser(employee.uid);
         if (
           user.email !== employee.email ||
           user.customClaims?.nexoDemo !== true ||
-          user.customClaims?.role !== "chat"
+          user.customClaims?.role !== employee.role
         )
           throw new Error(
             "Identidade de demonstração ocupada por conta não gerenciada pelo seed.",
@@ -56,7 +56,7 @@ async function main() {
         }
       }
     }
-    for (const employee of demoEmployees) {
+    for (const employee of demoIdentities) {
       try {
         await auth.getUser(employee.uid);
       } catch (error) {
@@ -75,7 +75,7 @@ async function main() {
         });
         try {
           await auth.setCustomUserClaims(employee.uid, {
-            role: "chat",
+            role: employee.role,
             nexoDemo: true,
           });
         } catch (claimsError) {
@@ -107,7 +107,13 @@ async function main() {
     }
     const { seedServiceDeskRecords } =
       await import("../src/server/repositories/service-desk-seed");
-    await seedServiceDeskRecords(db, demoArticles, demoTickets(new Date()));
+    const timestamp = new Date();
+    await seedServiceDeskRecords(
+      db,
+      demoArticles,
+      demoTickets(timestamp),
+      demoConversations(timestamp),
+    );
     console.log(
       "Seed concluído sem sobrescrever documentos existentes. Senhas não são alteradas em reexecuções.",
     );

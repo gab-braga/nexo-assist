@@ -1,11 +1,74 @@
 import "server-only";
-import type { Filter } from "mongodb";
+import type { Filter, Db, ClientSession } from "mongodb";
 import { database } from "@/server/lib/mongodb";
 import { AppError } from "@/server/lib/errors";
 import { ticketBackend } from "@/server/lib/ticket-availability";
 import type { Ticket, TicketDraft, TicketEvent } from "@/types/tickets";
 import type { Conversation, Message } from "@/types/domain";
 import type { AgentRun } from "@/types/ai";
+import { ticketDeadline } from "@/server/policies/tickets";
+
+/** The already-authorized human reply and service update share one transaction. */
+export async function recordHumanServiceResponse(
+  db: Db,
+  conversation: Conversation,
+  message: Message,
+  session: ClientSession,
+) {
+  if (message.role !== "agent" || !conversation.selectedTicketId) return;
+  if (
+    conversation.status !== "active" ||
+    conversation.agentId !== message.authorId
+  )
+    throw new AppError(
+      "FORBIDDEN",
+      "Somente o analista responsável pode atualizar o atendimento.",
+    );
+  const tickets = db.collection<Ticket>("tickets");
+  const before = await tickets.findOne(
+    { _id: conversation.selectedTicketId, customerId: conversation.customerId },
+    { session },
+  );
+  if (!before)
+    throw new AppError("NOT_FOUND", "Chamado vinculado não encontrado.");
+  if (before.status === "resolved") return;
+  const after: Ticket = {
+    ...before,
+    lastServiceUpdateAt: message.createdAt,
+    updatedAt: message.createdAt,
+    nextResponseDueAt: ticketDeadline(message.createdAt, before.priority),
+    version: before.version + 1,
+  };
+  const saved = await tickets.replaceOne(
+    {
+      _id: before._id,
+      customerId: conversation.customerId,
+      version: before.version,
+    },
+    after,
+    { session },
+  );
+  if (saved.modifiedCount !== 1)
+    throw new AppError(
+      "CONFLICT",
+      "O chamado mudou. Atualize e tente novamente.",
+    );
+  await db
+    .collection<TicketEvent>("ticket_events")
+    .insertOne(
+      {
+        _id: `response:${message._id}`,
+        ticketId: before._id,
+        actorId: message.authorId,
+        operation: "service_update",
+        reason: message.text,
+        before,
+        after,
+        createdAt: message.createdAt,
+      },
+      { session },
+    );
+}
 
 export interface TicketTransaction {
   getConversation(id: string): Promise<Conversation | null>;
