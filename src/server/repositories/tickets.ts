@@ -24,6 +24,7 @@ export interface TicketTransaction {
     previousState?: string;
     newState?: string;
     outcome?: string;
+    messageId?: string;
     digest?: string;
   }): Promise<void>;
   lockCustomer(customerId: string): Promise<void>;

@@ -19,6 +19,7 @@ import { transferToHuman } from "./handoff";
 import { conversationTitle } from "@/lib/conversation-title";
 import { conversationState } from "@/auth/conversation-state";
 import { ConversationContextPatchSchema } from "@/server/ai/schemas";
+import { mergeAudit } from "@/server/policies/agent-actions";
 
 export function assertAgentConversation(
   conversation: Conversation | null,
@@ -53,6 +54,11 @@ async function interruptExpiredRun(
         state: "interrupted",
         errorCode: "RUN_INTERRUPTED",
         completedAt: now,
+        audit: run.audit.map((entry) =>
+          entry.state === "running"
+            ? { ...entry, state: "unknown" as const }
+            : entry,
+        ),
       },
     },
     { session },
@@ -101,6 +107,7 @@ async function interruptExpiredRun(
 }
 
 export interface AgentRunRepository {
+  recordAudit(run: AgentRun, entry: AgentAudit): Promise<AgentAudit>;
   begin(
     user: SessionUser,
     input: AgentTurnInput,
@@ -126,6 +133,40 @@ export interface AgentRunRepository {
 }
 
 const mongoAgentRuns: AgentRunRepository = {
+  async recordAudit(run, entry) {
+    const db = await database();
+    const session = db.client.startSession();
+    try {
+      return await session.withTransaction(async () => {
+        const collection = db.collection<AgentRun>("agent_runs");
+        const stored = await collection.findOne(
+          {
+            _id: run._id,
+            conversationId: run.conversationId,
+            customerId: run.customerId,
+          },
+          { session },
+        );
+        if (!stored)
+          throw new AppError("NOT_FOUND", "Execução não encontrada.");
+        const previous = stored.audit.find((event) => event.id === entry.id);
+        if (previous?.state && previous.state !== "running") return previous;
+        if (entry.state === "running" && stored.state !== "running")
+          throw new AppError("HUMAN_CONTROL", "A execução não está ativa.");
+        const audit = mergeAudit(stored.audit, [entry]);
+        if (!audit.some((event) => event.id === entry.id))
+          throw new AppError("TOOL_LIMIT", "Limite de registros atingido.");
+        await collection.updateOne(
+          { _id: run._id },
+          { $set: { audit } },
+          { session },
+        );
+        return audit.find((event) => event.id === entry.id)!;
+      });
+    } finally {
+      await session.endSession();
+    }
+  },
   async begin(user, input, model) {
     const db = await database();
     const session = db.client.startSession();
@@ -558,6 +599,11 @@ const mongoAgentRuns: AgentRunRepository = {
           { session },
         );
         if (!stored) return null;
+        const recordedAudit = mergeAudit(stored.audit, audit).map((entry) =>
+          entry.state === "running"
+            ? { ...entry, state: "unknown" as const }
+            : entry,
+        );
         const conversations = db.collection<Conversation>("conversations");
         const conversation = await conversations.findOne(
           { _id: run.conversationId },
@@ -583,7 +629,9 @@ const mongoAgentRuns: AgentRunRepository = {
                 sequence: conversation!.version + 1,
                 runId: run._id,
                 processingState: "completed",
-                decisionRefs: audit.map((_, index) => `${run._id}:${index}`),
+                decisionRefs: recordedAudit.map(
+                  (entry, index) => entry.id ?? `${run._id}:${index}`,
+                ),
               }
             : null;
         if (message)
@@ -614,7 +662,9 @@ const mongoAgentRuns: AgentRunRepository = {
                   ? "interrupted"
                   : "failed",
               processingErrorCode: failureCode,
-              decisionRefs: audit.map((_, index) => `${run._id}:${index}`),
+              decisionRefs: recordedAudit.map(
+                (entry, index) => entry.id ?? `${run._id}:${index}`,
+              ),
             },
           },
           { session },
@@ -633,7 +683,7 @@ const mongoAgentRuns: AgentRunRepository = {
               responseSequence: message?.sequence ?? null,
               completedAt: new Date(),
               errorCode: failureCode,
-              audit,
+              audit: recordedAudit,
               usage,
             },
           },
@@ -662,6 +712,8 @@ const mongoAgentRuns: AgentRunRepository = {
 };
 
 export const agentRunRepository: AgentRunRepository = {
+  recordAudit: (run, entry) =>
+    databaseOperation(() => mongoAgentRuns.recordAudit(run, entry)),
   begin: (user, input, model) =>
     databaseOperation(() => mongoAgentRuns.begin(user, input, model)),
   loadContext: (run) =>

@@ -539,6 +539,7 @@ test("turn service streams and persists final output; replay does not invoke the
     },
   ];
   const repo: AgentRunRepository = {
+    recordAudit: async (_run, entry) => entry,
     begin: async () => run,
     loadContext: async () => ({
       initialMessage: history[0],

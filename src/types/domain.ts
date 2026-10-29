@@ -98,6 +98,15 @@ export type Conversation = {
 };
 
 export type Message = {
+  observability?: {
+    runId: string;
+    model: string;
+    elapsedMs?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    traceId?: string;
+  };
+  actions?: import("@/lib/schemas/agent-actions").AgentAction[];
   _id: string;
   conversationId: string;
   authorId: string;

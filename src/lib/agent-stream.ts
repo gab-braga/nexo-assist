@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentStreamEvent } from "@/types/ai";
+import { AgentActionSchema } from "@/lib/schemas/agent-actions";
 
 const eventSchema = z.discriminatedUnion("type", [
   z.object({
@@ -8,6 +9,7 @@ const eventSchema = z.discriminatedUnion("type", [
     conversationId: z.string().optional(),
   }),
   z.object({ type: z.literal("delta"), text: z.string() }),
+  z.object({ type: z.literal("action"), action: AgentActionSchema }),
   z.object({ type: z.literal("error"), code: z.string(), error: z.string() }),
   z.object({
     type: z.literal("completed"),
@@ -26,6 +28,7 @@ const eventSchema = z.discriminatedUnion("type", [
         .optional(),
       processingErrorCode: z.string().nullable().optional(),
       decisionRefs: z.array(z.string()).optional(),
+      actions: z.array(AgentActionSchema).max(30).optional(),
     }),
   }),
 ]);

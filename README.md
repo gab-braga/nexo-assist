@@ -89,6 +89,8 @@ Consulte [Fase 4 — Conversas, memória e persistência](docs/fase-4-memoria-pe
 
 ## Validação
 
+A [Fase 7 — Transparência e observabilidade](docs/fase-7-transparencia-observabilidade.md) descreve a auditoria incremental, as ações no chat e no console, a integração nativa com Mastra e os testes específicos.
+
 ```sh
 npm run typecheck
 npm run lint

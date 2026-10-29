@@ -29,7 +29,11 @@ import type {
 } from "@/server/services/conversations";
 
 export type WorkspaceProps = {
-  analystContext?: Awaited<ReturnType<typeof import("@/server/services/conversations").getAnalystContext>> | null;
+  analystContext?: Awaited<
+    ReturnType<
+      typeof import("@/server/services/conversations").getAnalystContext
+    >
+  > | null;
   interaction?: import("@/types/tickets").ConversationInteraction | null;
   user: SessionUser;
   list: Awaited<ReturnType<typeof listConversations>>;
@@ -59,8 +63,16 @@ export function useConversationWorkspace({
   const [error, setError] = useState("");
   const [, refreshTransition] = useTransition();
   const [connectionError, setConnectionError] = useState("");
-  const transitionRequest = useRef<{ id: string; operation: string; conversationId: string; version: number } | null>(null);
-  const handoffRequest = useRef<{ requestId: string; conversationId: string } | null>(null);
+  const transitionRequest = useRef<{
+    id: string;
+    operation: string;
+    conversationId: string;
+    version: number;
+  } | null>(null);
+  const handoffRequest = useRef<{
+    requestId: string;
+    conversationId: string;
+  } | null>(null);
   const handoffSending = useRef(false);
   const [humanPending, setHumanPending] = useState(false);
   const [streamMessages, setStreamMessages] = useState<MessageDTO[]>([]);
@@ -97,21 +109,48 @@ export function useConversationWorkspace({
       // A refresh would remount the newly-created route and discard a failed
       // first-send draft. Refresh it only after success or explicit navigation.
       if (document.hidden || pending || older) return;
-      if (!navigator.onLine) { setConnectionError("Sem conexão. As mensagens serão atualizadas quando a conexão retornar."); return; }
+      if (!navigator.onLine) {
+        setConnectionError(
+          "Sem conexão. As mensagens serão atualizadas quando a conexão retornar.",
+        );
+        return;
+      }
       setConnectionError("");
       if (createdConversation) {
         const attempt = generation.current;
-        void fetchMessages({ conversationId: createdConversation._id }).then(result => {
-          if (!current || generation.current !== attempt) return;
-          if (result.ok) { setCreatedConversation(result.data.conversation); setStreamMessages(result.data.items); }
-          else setConnectionError(result.error);
-        }).catch(() => { if (current) setConnectionError("Não foi possível atualizar o histórico. Tentaremos novamente."); });
+        void fetchMessages({ conversationId: createdConversation._id })
+          .then((result) => {
+            if (!current || generation.current !== attempt) return;
+            if (result.ok) {
+              setCreatedConversation(result.data.conversation);
+              setStreamMessages(result.data.items);
+            } else setConnectionError(result.error);
+          })
+          .catch(() => {
+            if (current)
+              setConnectionError(
+                "Não foi possível atualizar o histórico. Tentaremos novamente.",
+              );
+          });
       } else refreshTransition(() => router.refresh());
     };
-    const timer = setInterval(refresh, conversation && (!conversation.aiEnabled || conversation.aiHandoff || conversation.status === "active") ? 5000 : 10000);
+    const timer = setInterval(
+      refresh,
+      conversation &&
+        (!conversation.aiEnabled ||
+          conversation.aiHandoff ||
+          conversation.status === "active")
+        ? 5000
+        : 10000,
+    );
     window.addEventListener("online", refresh);
     window.addEventListener("focus", refresh);
-    return () => { current = false; clearInterval(timer); window.removeEventListener("online", refresh); window.removeEventListener("focus", refresh); };
+    return () => {
+      current = false;
+      clearInterval(timer);
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("focus", refresh);
+    };
   }, [router, pending, older, createdConversation, conversation]);
 
   function newConversation() {
@@ -140,49 +179,52 @@ export function useConversationWorkspace({
     setError("");
     const next: PendingMessage =
       request.current?.text === text &&
-        (!conversation || request.current.conversationId === conversation._id)
+      (!conversation || request.current.conversationId === conversation._id)
         ? request.current
         : {
-          id: crypto.randomUUID(),
-          text,
-          conversationId: conversation?._id ?? crypto.randomUUID(),
-          ...(!conversation ? { startConversation: true as const } : {}),
-        };
+            id: crypto.randomUUID(),
+            text,
+            conversationId: conversation?._id ?? crypto.randomUUID(),
+            ...(!conversation ? { startConversation: true as const } : {}),
+          };
     request.current = next;
+    const timestamp = new Date().toISOString();
+    const previewId = `stream-${next.id}`;
+    const usesAI =
+      user.role === "chat" &&
+      (!conversation ||
+        (conversation.aiEnabled &&
+          !conversation.aiHandoff &&
+          conversation.status === "waiting"));
+    // Urgent state: a transition can retain updates until the whole async send
+    // completes, which would hide real tool progress received during streaming.
+    if (usesAI)
+      setStreamMessages([
+        {
+          _id: next.id,
+          conversationId: next.conversationId,
+          authorId: user.uid,
+          authorName: user.name,
+          role: "chat",
+          text: next.text,
+          createdAt: timestamp,
+        },
+        {
+          _id: previewId,
+          conversationId: next.conversationId,
+          authorId: "nexo-assist",
+          authorName: "Nexo Assist",
+          role: "assistant",
+          text: "Processando sua mensagem…",
+          createdAt: timestamp,
+        },
+      ]);
     startTransition(async () => {
       try {
-        if (
-          user.role === "chat" &&
-          (!conversation ||
-            (conversation.aiEnabled &&
-              !conversation.aiHandoff &&
-              conversation.status === "waiting"))
-        ) {
-          const timestamp = new Date().toISOString();
-          const previewId = `stream-${next.id}`;
+        if (usesAI) {
           const controller = new AbortController();
           activeRequest.current = controller;
           let accepted = false;
-          setStreamMessages([
-            {
-              _id: next.id,
-              conversationId: next.conversationId,
-              authorId: user.uid,
-              authorName: user.name,
-              role: "chat",
-              text: next.text,
-              createdAt: timestamp,
-            },
-            {
-              _id: previewId,
-              conversationId: next.conversationId,
-              authorId: "nexo-assist",
-              authorName: "Nexo Assist",
-              role: "assistant",
-              text: "Processando sua mensagem…",
-              createdAt: timestamp,
-            },
-          ]);
           let streamed = "";
           try {
             const response = await fetch("/api/agent", {
@@ -235,6 +277,27 @@ export function useConversationWorkspace({
                       : message,
                   ),
                 );
+              } else if (event.type === "action") {
+                if (
+                  event.action.runId !== next.id ||
+                  event.action.conversationId !== next.conversationId
+                )
+                  return;
+                setStreamMessages((messages) =>
+                  messages.map((message) =>
+                    message._id === previewId
+                      ? {
+                          ...message,
+                          actions: [
+                            ...(message.actions ?? []).filter(
+                              (action) => action.id !== event.action.id,
+                            ),
+                            event.action,
+                          ].sort((a, b) => a.order - b.order),
+                        }
+                      : message,
+                  ),
+                );
               } else if (event.type === "completed") {
                 setStreamMessages((messages) =>
                   messages.map((message) =>
@@ -254,11 +317,25 @@ export function useConversationWorkspace({
                 ? failure.message
                 : "A resposta foi interrompida. Seu texto foi preservado; tente novamente para verificar o resultado.",
             );
-            setStreamMessages((messages) =>
-              accepted
-                ? messages.filter((message) => message.role === "chat")
-                : [],
-            );
+            setStreamMessages((messages) => {
+              if (!accepted) return [];
+              const actions =
+                messages.find((message) => message._id === previewId)
+                  ?.actions ?? [];
+              return messages
+                .filter((message) => message.role === "chat")
+                .map((message) => ({
+                  ...message,
+                  actions: actions.map((action) => ({
+                    ...action,
+                    messageId: message._id,
+                    state:
+                      action.state === "running"
+                        ? ("unknown" as const)
+                        : action.state,
+                  })),
+                }));
+            });
             // Uncertain outcomes keep their IDs; known terminal failures allow
             // a subsequent explicit attempt, never an automatic second run.
             if (
@@ -312,8 +389,16 @@ export function useConversationWorkspace({
     if (sending.current) return;
     sending.current = true;
     setError("");
-    const next = transitionRequest.current?.conversationId === conversation._id && transitionRequest.current.operation === operation
-      ? transitionRequest.current : { id: crypto.randomUUID(), operation, conversationId: conversation._id, version: conversation.version };
+    const next =
+      transitionRequest.current?.conversationId === conversation._id &&
+      transitionRequest.current.operation === operation
+        ? transitionRequest.current
+        : {
+            id: crypto.randomUUID(),
+            operation,
+            conversationId: conversation._id,
+            version: conversation.version,
+          };
     transitionRequest.current = next;
     startTransition(async () => {
       try {
@@ -324,15 +409,26 @@ export function useConversationWorkspace({
           operation,
         });
         if (!result.ok) setError(result.error);
-        if (result.ok || !["PERSISTENCE_UNAVAILABLE", "INTERNAL"].includes(result.code)) transitionRequest.current = null;
+        if (
+          result.ok ||
+          !["PERSISTENCE_UNAVAILABLE", "INTERNAL"].includes(result.code)
+        )
+          transitionRequest.current = null;
         router.refresh();
-      } catch { setError("Não foi possível verificar a alteração. Repita a mesma ação para consultar o resultado."); }
-      finally { sending.current = false; }
+      } catch {
+        setError(
+          "Não foi possível verificar a alteração. Repita a mesma ação para consultar o resultado.",
+        );
+      } finally {
+        sending.current = false;
+      }
     });
   }
 
   function navigate(target: string) {
-    const nextId = new URL(target, window.location.href).searchParams.get("conversation");
+    const nextId = new URL(target, window.location.href).searchParams.get(
+      "conversation",
+    );
     if (nextId !== conversation?._id) {
       generation.current++;
       activeRequest.current?.abort();
@@ -345,7 +441,7 @@ export function useConversationWorkspace({
 
   const canReply = conversation
     ? conversation.status !== "closed" &&
-    (user.role === "chat" || conversation.agentId === user.uid)
+      (user.role === "chat" || conversation.agentId === user.uid)
     : user.role === "chat";
 
   function requestHuman() {
@@ -357,23 +453,46 @@ export function useConversationWorkspace({
     activeRequest.current?.abort();
     activeRequest.current = null;
     sending.current = false;
-    setStreamMessages(messages => messages.filter(message => message.role === "chat"));
-    const next = handoffRequest.current?.conversationId === conversation._id ? handoffRequest.current
-      : { requestId: crypto.randomUUID(), conversationId: conversation._id };
+    setStreamMessages((messages) =>
+      messages.filter((message) => message.role === "chat"),
+    );
+    const next =
+      handoffRequest.current?.conversationId === conversation._id
+        ? handoffRequest.current
+        : { requestId: crypto.randomUUID(), conversationId: conversation._id };
     handoffRequest.current = next;
     setError("");
     startTransition(async () => {
       try {
         const result = await requestHumanSupport(next);
         if (generation.current !== attempt) return;
-        if (!result.ok) { setError(result.error); return; }
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
         handoffRequest.current = null;
         if (createdConversation) {
-          const snapshot = await fetchMessages({ conversationId: next.conversationId });
-          if (snapshot.ok) { setCreatedConversation(snapshot.data.conversation); setStreamMessages(snapshot.data.items); }
-        } else { setStreamMessages([]); router.refresh(); }
-      } catch { setError("Não foi possível verificar a transferência. Tente novamente para consultar o resultado."); }
-      finally { if (generation.current === attempt) { handoffSending.current = false; setHumanPending(false); } }
+          const snapshot = await fetchMessages({
+            conversationId: next.conversationId,
+          });
+          if (snapshot.ok) {
+            setCreatedConversation(snapshot.data.conversation);
+            setStreamMessages(snapshot.data.items);
+          }
+        } else {
+          setStreamMessages([]);
+          router.refresh();
+        }
+      } catch {
+        setError(
+          "Não foi possível verificar a transferência. Tente novamente para consultar o resultado.",
+        );
+      } finally {
+        if (generation.current === attempt) {
+          handoffSending.current = false;
+          setHumanPending(false);
+        }
+      }
     });
   }
 

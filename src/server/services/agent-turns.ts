@@ -14,6 +14,8 @@ import type { AgentRun, AgentStreamEvent } from "@/types/ai";
 import type { Message } from "@/types/domain";
 import type { CoreMessage } from "@mastra/core/llm";
 import { buildAgentMemory } from "@/server/ai/memory";
+import { actionStream } from "@/server/ai/action-stream";
+import { functionalActions } from "@/server/policies/agent-actions";
 
 export function agentError(error: unknown): { code: string; error: string } {
   if (error instanceof AppError)
@@ -63,8 +65,16 @@ export function providerFailureMetadata(error: unknown) {
   return { kind, status, providerCode };
 }
 
-function dto(message: Message) {
-  return { ...message, createdAt: message.createdAt.toISOString() };
+function dto(message: Message, run?: AgentRun, audit = run?.audit ?? []) {
+  return {
+    ...message,
+    createdAt: message.createdAt.toISOString(),
+    ...(run
+      ? {
+          actions: functionalActions(run, audit, message._id),
+        }
+      : {}),
+  };
 }
 
 export function recentAgentContext(messages: Message[]) {
@@ -106,22 +116,25 @@ export function createAgentTurnService(deps: {
           if (run.state === "completed" && run.response)
             yield {
               type: "completed",
-              message: dto({
-                _id: run.responseId,
-                conversationId: run.conversationId,
-                role: "assistant",
-                authorId: "nexo-assist",
-                authorName: "Nexo Assist",
-                text: run.response,
-                createdAt:
-                  run.responseCreatedAt ?? run.completedAt ?? run.createdAt,
-                sequence: run.responseSequence ?? undefined,
-                runId: run._id,
-                processingState: "completed",
-                decisionRefs: run.audit.map(
-                  (_, index) => `${run._id}:${index}`,
-                ),
-              }),
+              message: dto(
+                {
+                  _id: run.responseId,
+                  conversationId: run.conversationId,
+                  role: "assistant",
+                  authorId: "nexo-assist",
+                  authorName: "Nexo Assist",
+                  text: run.response,
+                  createdAt:
+                    run.responseCreatedAt ?? run.completedAt ?? run.createdAt,
+                  sequence: run.responseSequence ?? undefined,
+                  runId: run._id,
+                  processingState: "completed",
+                  decisionRefs: run.audit.map(
+                    (entry, index) => entry.id ?? `${run._id}:${index}`,
+                  ),
+                },
+                run,
+              ),
             };
           else
             yield {
@@ -160,6 +173,10 @@ export function createAgentTurnService(deps: {
             return notice;
           },
           (patch) => deps.repository.remember(run, patch),
+          {
+            responseId: run.responseId,
+            persist: (entry) => deps.repository.recordAudit(run, entry),
+          },
         );
         const requestContext = new RequestContext<{ nexo: NexoRunContext }>();
         requestContext.set("nexo", scope);
@@ -170,6 +187,7 @@ export function createAgentTurnService(deps: {
           );
           const agent = await deps.agent();
           const output = await agent.stream(messages, {
+            runId: run._id,
             requestContext,
             abortSignal: signal,
             maxSteps: AI_LIMITS.steps,
@@ -184,7 +202,12 @@ export function createAgentTurnService(deps: {
           let text = "";
           let buffered = "";
           let flushedAt = Date.now();
-          for await (const chunk of output.fullStream) {
+          for await (const item of actionStream(output.fullStream, scope)) {
+            if (item.kind === "action") {
+              yield { type: "action", action: item.action };
+              continue;
+            }
+            const chunk = item.chunk;
             if (scope.handoffMessage) break;
             if (signal.aborted)
               throw new AppError(
@@ -230,8 +253,12 @@ export function createAgentTurnService(deps: {
             }
           }
           if (scope.handoffMessage) {
+            await scope.settle();
             terminal = true;
-            yield { type: "completed", message: dto(scope.handoffMessage) };
+            yield {
+              type: "completed",
+              message: dto(scope.handoffMessage, run, scope.audit),
+            };
             return;
           }
           const consumed = await output.usage;
@@ -266,11 +293,15 @@ export function createAgentTurnService(deps: {
               "A conversa passou ao atendimento humano. Atualize para acompanhar.",
             );
           terminal = true;
-          yield { type: "completed", message: dto(saved) };
+          yield { type: "completed", message: dto(saved, run, scope.audit) };
         } catch (error) {
           if (scope.handoffMessage) {
+            await scope.settle();
             terminal = true;
-            yield { type: "completed", message: dto(scope.handoffMessage) };
+            yield {
+              type: "completed",
+              message: dto(scope.handoffMessage, run, scope.audit),
+            };
             return;
           }
           console.error("Agent execution failed", {
@@ -284,6 +315,9 @@ export function createAgentTurnService(deps: {
                   "A resposta foi interrompida. Seu histórico foi preservado; nenhuma operação será repetida automaticamente.",
               }
             : agentError(error);
+          await scope.settle();
+          while (scope.pendingActions.length)
+            yield { type: "action", action: scope.pendingActions.shift()! };
           // Only sanitized codes/metadata are persisted. No provider request bodies.
           await deps.repository.finish(
             run,
@@ -297,6 +331,7 @@ export function createAgentTurnService(deps: {
         }
       } finally {
         execution?.abort();
+        await scope?.settle();
         // Closing a reader, including before its first delta, never replays tools.
         if (!terminal) {
           try {

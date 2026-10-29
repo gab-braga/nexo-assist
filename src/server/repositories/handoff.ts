@@ -9,6 +9,7 @@ import { buildHandoffSummary, handoffNotice } from "@/server/policies/handoff";
 import type { Conversation, Message } from "@/types/domain";
 import type { AgentRun, AgentAudit } from "@/types/ai";
 import type { Ticket } from "@/types/tickets";
+import { mergeAudit } from "@/server/policies/agent-actions";
 
 /** Shared by the authenticated employee command and guarded Mastra tool. */
 export async function transferToHuman(input: {
@@ -138,15 +139,13 @@ export async function transferToHuman(input: {
           if (first) recent.unshift(first);
         }
         const ticket = conversation.selectedTicketId
-          ? await db
-              .collection<Ticket>("tickets")
-              .findOne(
-                {
-                  _id: conversation.selectedTicketId,
-                  customerId: input.customerId,
-                },
-                { session },
-              )
+          ? await db.collection<Ticket>("tickets").findOne(
+              {
+                _id: conversation.selectedTicketId,
+                customerId: input.customerId,
+              },
+              { session },
+            )
           : null;
         const related = ticket
           ? [
@@ -205,7 +204,20 @@ export async function transferToHuman(input: {
           evidenceIds: [conversation._id],
           at: now.toISOString(),
         };
-        const entries = [...(input.audit ?? []), evidence];
+        const storedRun = run
+          ? await db.collection<AgentRun>("agent_runs").findOne(
+              {
+                _id: run._id,
+                customerId: input.customerId,
+                conversationId: conversation._id,
+              },
+              { session },
+            )
+          : null;
+        const entries = mergeAudit(storedRun?.audit ?? [], [
+          ...(input.audit ?? []),
+          evidence,
+        ]);
         const notice: Message = {
           _id: id,
           conversationId: conversation._id,
@@ -218,7 +230,9 @@ export async function transferToHuman(input: {
           ...(run
             ? {
                 runId: run._id,
-                decisionRefs: entries.map((_, index) => `${run._id}:${index}`),
+                decisionRefs: entries.map(
+                  (entry, index) => entry.id ?? `${run._id}:${index}`,
+                ),
               }
             : {}),
           processingState: "completed",
@@ -232,23 +246,21 @@ export async function transferToHuman(input: {
             },
             { session },
           );
-          await db
-            .collection<AgentRun>("agent_runs")
-            .updateOne(
-              { _id: run._id },
-              {
-                $set: {
-                  state: "completed",
-                  response: notice.text,
-                  responseCreatedAt: now,
-                  responseSequence: notice.sequence,
-                  completedAt: now,
-                  errorCode: null,
-                  audit: entries,
-                },
+          await db.collection<AgentRun>("agent_runs").updateOne(
+            { _id: run._id },
+            {
+              $set: {
+                state: "completed",
+                response: notice.text,
+                responseCreatedAt: now,
+                responseSequence: notice.sequence,
+                completedAt: now,
+                errorCode: null,
+                audit: entries,
               },
-              { session },
-            );
+            },
+            { session },
+          );
         }
         await db
           .collection<{

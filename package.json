@@ -16,6 +16,8 @@
     "test:agent": "node --conditions=react-server --import tsx --test tests/agent.test.ts tests/memory.test.ts",
     "test:flows": "node --conditions=react-server --import tsx --test tests/flows.test.ts",
     "test:handoff": "node --conditions=react-server --import tsx --test tests/handoff.test.ts",
+    "test:transparency": "node --conditions=react-server --import tsx --test tests/transparency.test.ts",
+    "test:transparency:integration": "node --conditions=react-server --import tsx tests/transparency-integration.ts",
     "test:handoff:database": "node --conditions=react-server --import tsx tests/handoff-database.ts",
     "test:handoff:ui": "node --conditions=react-server --import tsx tests/handoff-ui.ts",
     "test:flows:database": "node --conditions=react-server --import tsx tests/flows-database.ts",

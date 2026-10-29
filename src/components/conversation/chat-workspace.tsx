@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Fragment } from "react";
 import { cn } from "@/lib/utils";
 import { ArrowUp, Plus, Headset } from "lucide-react";
 import { canProcessAgent } from "@/auth/conversation-state";
@@ -12,6 +13,7 @@ import { messageProcessingFeedback } from "@/lib/message-processing";
 import { ConversationFlowPanel } from "./conversation-flow-panel";
 import { TicketCard } from "./ticket-card";
 import { CustomerHistoryDialog } from "./customer-history-dialog";
+import { AgentActions } from "./agent-actions";
 import {
   useConversationWorkspace,
   type WorkspaceProps,
@@ -137,6 +139,11 @@ export function ChatWorkspace(props: WorkspaceProps) {
             )}
           >
             {feedback}
+          </p>
+        )}
+        {history?.actionError && (
+          <p role="status" className="mb-2 text-xs text-muted-foreground">
+            {history.actionError}
           </p>
         )}
         {mode === "new" ? (
@@ -274,24 +281,27 @@ export function ChatWorkspace(props: WorkspaceProps) {
                 )}
                 {visibleMessages.map((message) =>
                   message.role === "chat" ? (
-                    <div
-                      data-visual="customer-bubble"
-                      className="ml-auto mb-4.75 w-fit max-w-130 bg-[#1c2633] text-white py-3 px-4 rounded-[12px_12px_3px_12px] leading-5.25 min-h-10.75 group-data-[mode=new]/chat:w-130 max-[800.001px]:max-w-[90%] max-[800.001px]:group-data-[mode=new]/chat:w-fit max-[540.001px]:text-[12px] max-[540.001px]:leading-4.75 max-[540.001px]:mb-3.75 min-[801px]:group-data-[mode=new]/chat:nth-3:pr-15"
-                      key={message._id}
-                    >
-                      <p className="whitespace-pre-wrap wrap-break-word">
-                        {message.text}
-                      </p>
-                      <small className="text-[10px] opacity-70">
-                        {time(message.createdAt)}
-                      </small>
-                    </div>
+                    <Fragment key={message._id}>
+                      <AgentActions actions={message.actions} />
+                      <div
+                        data-visual="customer-bubble"
+                        className="ml-auto mb-4.75 w-fit max-w-130 bg-[#1c2633] text-white py-3 px-4 rounded-[12px_12px_3px_12px] leading-5.25 min-h-10.75 group-data-[mode=new]/chat:w-130 max-[800.001px]:max-w-[90%] max-[800.001px]:group-data-[mode=new]/chat:w-fit max-[540.001px]:text-[12px] max-[540.001px]:leading-4.75 max-[540.001px]:mb-3.75 min-[801px]:group-data-[mode=new]/chat:nth-3:pr-15"
+                      >
+                        <p className="whitespace-pre-wrap wrap-break-word">
+                          {message.text}
+                        </p>
+                        <small className="text-[10px] opacity-70">
+                          {time(message.createdAt)}
+                        </small>
+                      </div>
+                    </Fragment>
                   ) : (
                     <div
                       data-visual="assistant-group"
                       className="mb-4.75 max-[540.001px]:mb-3.75"
                       key={message._id}
                     >
+                      <AgentActions actions={message.actions} />
                       <p className="mb-1 text-[11px] text-muted-foreground">
                         {message.authorName}
                       </p>

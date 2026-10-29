@@ -13,6 +13,29 @@ export type AgentIntent =
   | "out_of_scope";
 
 export type AgentAudit = {
+  id?: string;
+  sequence?: number;
+  state?: import("@/lib/schemas/agent-actions").AgentAction["state"];
+  startedAt?: string;
+  durationMs?: number;
+  facts?: {
+    priority?: string;
+    impact?: string;
+    urgency?: string;
+    count?: number;
+    hasMore?: boolean;
+    articles?: {
+      id: string;
+      title: string;
+      applicable?: boolean;
+      requiresEnvironment?: boolean;
+    }[];
+    tickets?: { id: string; number: string; title: string }[];
+    draftId?: string;
+    operation?: string;
+    reason?: string;
+  };
+  native?: { toolCallId?: string; traceId?: string; spanId?: string };
   kind: "model_decision" | "tool_result" | "service_validation";
   intent: AgentIntent;
   tool: string;
@@ -69,5 +92,9 @@ export type AgentMemorySnapshot = {
 export type AgentStreamEvent =
   | { type: "started"; runId: string; conversationId?: string }
   | { type: "delta"; text: string }
+  | {
+      type: "action";
+      action: import("@/lib/schemas/agent-actions").AgentAction;
+    }
   | { type: "completed"; message: MessageDTO }
   | { type: "error"; code: string; error: string };

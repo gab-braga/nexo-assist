@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { Fragment, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ import { Status } from "@/components/status";
 import { logout } from "@/server/actions/auth";
 import { AnalystContext } from "./analyst-context";
 import { canProcessAgent } from "@/auth/conversation-state";
+import { AgentActions } from "./agent-actions";
 import {
   useConversationWorkspace,
   type WorkspaceProps,
@@ -356,7 +357,7 @@ export function AgentWorkspace(props: WorkspaceProps) {
         <div
           data-visual="agent-transcript"
           className={cn(
-            "group/transcript flex-1 min-h-0 overflow-auto scrollbar-thin bg-[#edf0f4] pt-6 px-9.75 pb-4 flex flex-col justify-end gap-3.5 max-[1250.001px]:p-6.25 max-[1250.001px]:pb-4 max-[800.001px]:p-4.5 max-[800.001px]:pb-4 max-[540.001px]:justify-start max-[650.001px]:justify-start max-[650.001px]:py-4 max-[650.001px]:px-3",
+            "group/transcript flex-1 min-h-0 overflow-auto scrollbar-thin bg-[#edf0f4] pt-6 px-9.75 pb-4 flex flex-col [justify-content:safe_end] gap-3.5 max-[1250.001px]:p-6.25 max-[1250.001px]:pb-4 max-[800.001px]:p-4.5 max-[800.001px]:pb-4 max-[540.001px]:justify-start max-[650.001px]:justify-start max-[650.001px]:py-4 max-[650.001px]:px-3",
             assumed && "gap-3.75 min-[1500px]:pt-6.25",
           )}
           data-assumed={assumed}
@@ -390,20 +391,32 @@ export function AgentWorkspace(props: WorkspaceProps) {
               {conversation ? date(conversation.createdAt) : "Conversas"}
             </span>
           </div>
+          {history?.actionError && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {history.actionError}
+            </p>
+          )}
           {history?.items.map((message) => (
-            <AgentMessage
-              key={message._id}
-              text={message.text}
-              time={time(message.createdAt)}
-              from={
-                message.role === "chat"
-                  ? "user"
-                  : message.role === "assistant"
-                    ? "ai"
-                    : "agent"
-              }
-              author={message.authorName}
-            />
+            <Fragment key={message._id}>
+              <AgentActions
+                actions={message.actions}
+                analyst
+                metrics={message.observability}
+              />
+              <AgentMessage
+                key={message._id}
+                text={message.text}
+                time={time(message.createdAt)}
+                from={
+                  message.role === "chat"
+                    ? "user"
+                    : message.role === "assistant"
+                      ? "ai"
+                      : "agent"
+                }
+                author={message.authorName}
+              />
+            </Fragment>
           ))}
           {!history?.items.length && (
             <p className="text-sm text-muted-foreground">

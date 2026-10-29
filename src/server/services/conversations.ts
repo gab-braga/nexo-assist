@@ -31,6 +31,7 @@ import { agentRunRepository } from "@/server/repositories/agent-runs";
 import { messageHistoryFilter } from "@/server/policies/message-history";
 import { ticketService } from "./tickets";
 import { transferToHuman } from "@/server/repositories/handoff";
+import { readTransparency } from "@/server/repositories/agent-transparency";
 
 function checkAccess(
   user: SessionUser,
@@ -153,11 +154,25 @@ export async function getMessages(input: unknown) {
   const conversation = await readConversation(user, query.conversationId);
   const filter = messageHistoryFilter(query.conversationId, query.cursor);
   const rows = await findMessages(filter, 51);
-  const items: MessageDTO[] = rows
-    .slice(0, 50)
-    .map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+  let actionError: string | null = null;
+  let visible = rows.slice(0, 50);
+  try {
+    visible = await readTransparency(
+      conversation,
+      visible,
+      user.role === "agent",
+    );
+  } catch {
+    actionError =
+      "Não foi possível recuperar as ações deste histórico. Atualize para tentar novamente; as mensagens continuam disponíveis.";
+  }
+  const items: MessageDTO[] = visible.map((row) => ({
+    ...row,
+    createdAt: row.createdAt.toISOString(),
+  }));
   const last = items.at(-1);
   return {
+    actionError,
     conversation: serialize(conversation),
     items: items.reverse(),
     nextCursor:

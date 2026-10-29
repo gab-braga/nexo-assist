@@ -346,6 +346,7 @@ export function createTicketService(deps: {
           conversationId: conversation._id,
           actorId: user.uid,
           operation: "ticket_confirmed",
+          messageId: draft.confirmationMessageId,
           draftId: draft._id,
           digest: draft.digest,
           createdAt: timestamp,
@@ -356,6 +357,7 @@ export function createTicketService(deps: {
             conversationId: conversation._id,
             actorId: user.uid,
             operation: "request_human",
+            messageId: draft.confirmationMessageId,
             reason:
               priority === "critical"
                 ? "critical"

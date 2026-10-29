@@ -1,7 +1,7 @@
 import "server-only";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { runTool, type NexoRunContext } from "../context";
+import { runTool, toolScope, type NexoRunContext } from "../context";
 import {
   IntentSchema,
   rationaleSchema,
@@ -60,7 +60,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "cancelPendingOperation",
           "clarify",
           input.rationale,
@@ -88,7 +88,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "getTicketHistory",
           "status",
           input.rationale,
@@ -114,7 +114,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "updateConversationFlow",
           input.state.intent,
           input.rationale,
@@ -145,7 +145,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "recordDecision",
           input.intent,
           input.rationale,
@@ -167,7 +167,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "searchKnowledgeBase",
           "knowledge",
           input.rationale,
@@ -188,7 +188,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "listUserTickets",
           "tickets",
           input.rationale,
@@ -221,7 +221,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "getTicketDetails",
           "tickets",
           input.rationale,
@@ -247,7 +247,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "getTicketStatus",
           "status",
           input.rationale,
@@ -288,7 +288,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "findDuplicateTickets",
           "create",
           input.rationale,
@@ -328,7 +328,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "evaluateTicketPriority",
           "create",
           input.rationale,
@@ -355,7 +355,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "prepareTicketDraft",
           input.change.operation === "handoff"
             ? "handoff"
@@ -407,7 +407,7 @@ export function createNexoTools(services: {
       outputSchema: ToolResultSchema,
       execute: async (input, context) =>
         runTool(
-          context?.requestContext?.get("nexo"),
+          toolScope(context),
           "requestHumanHandoff",
           "handoff",
           input.rationale,
