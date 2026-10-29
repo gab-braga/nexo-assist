@@ -3,7 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { ArrowUp, Plus, Search } from "lucide-react";
+import { ArrowUp, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { FieldError } from "@/components/ui/field";
+import { ConversationFilters } from "./conversation-filters";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Status } from "@/components/status";
 import {
@@ -39,9 +43,8 @@ export function ChatWorkspace(props: WorkspaceProps) {
     pending,
     error,
     text,
-    setText,
-    subject,
-    setSubject,
+    messageForm,
+    createForm,
     setCreationId,
     href,
     create,
@@ -110,25 +113,35 @@ export function ChatWorkspace(props: WorkspaceProps) {
                   data-visual="ticket-body"
                   className="py-3.5 px-4.25 max-[540.001px]:p-3"
                 >
-                  <form onSubmit={create}>
-                    <label
+                  <form onSubmit={create} noValidate>
+                    <Label
                       htmlFor="subject"
                       className="block text-[13px] mb-1.5"
                     >
                       Novo atendimento
-                    </label>
-                    <input
+                    </Label>
+                    <Input
+                      unstyled
                       id="subject"
                       className="w-full border border-border rounded-lg p-2.5 text-[14px]"
-                      value={subject}
+                      {...createForm.register("subject", {
+                        onChange: () => setCreationId(null),
+                      })}
+                      aria-invalid={!!createForm.formState.errors.subject}
+                      aria-describedby={
+                        createForm.formState.errors.subject
+                          ? "subject-error"
+                          : undefined
+                      }
                       minLength={3}
                       maxLength={160}
                       required
-                      onChange={(e) => {
-                        setSubject(e.target.value);
-                        setCreationId(null);
-                      }}
                       placeholder="Descreva o assunto do atendimento"
+                    />
+                    <FieldError
+                      id="subject-error"
+                      className="mt-1.5 text-red-700"
+                      errors={[createForm.formState.errors.subject]}
                     />
                     <div className="flex gap-2 mt-4">
                       <Button type="submit" disabled={pending}>
@@ -207,36 +220,11 @@ export function ChatWorkspace(props: WorkspaceProps) {
                 <summary className="text-xs cursor-pointer">
                   Pesquisar e filtrar
                 </summary>
-                <form
-                  action={user.role === "agent" ? "/agent" : "/chat"}
-                  className="flex flex-wrap gap-2 items-center"
-                >
-                  <input
-                    aria-label="Pesquisar atendimentos"
-                    name="search"
-                    defaultValue={search}
-                    maxLength={100}
-                    placeholder="Pesquisar atendimentos"
-                    className="min-w-0 flex-1 bg-transparent outline-none text-[12px]"
-                  />
-                  <select
-                    aria-label="Filtrar atendimentos"
-                    name="status"
-                    defaultValue={status}
-                    className="min-w-0 bg-transparent text-[12px]"
-                  >
-                    <option value="all">Todos</option>
-                    <option value="waiting">Aguardando</option>
-                    <option value="active">Em atendimento</option>
-                    <option value="closed">Encerrados</option>
-                    {user.role === "agent" && (
-                      <option value="mine">Meus atendimentos</option>
-                    )}
-                  </select>
-                  <button aria-label="Aplicar filtros" type="submit">
-                    <Search size={15} />
-                  </button>
-                </form>
+                <ConversationFilters
+                  role={user.role}
+                  search={search}
+                  status={status}
+                />
               </details>
             </div>
             {conversation && (
@@ -335,18 +323,23 @@ export function ChatWorkspace(props: WorkspaceProps) {
       <form
         data-visual="customer-composer"
         className="pb-4 bg-card [&>div]:flex [&>div]:items-center [&>div]:p-1.25 [&>div]:border [&>div]:border-[#dfe2e7] [&>div]:rounded-[13px] [&>div]:min-h-12.25 [&_input]:flex-1 [&_input]:min-w-0 [&_input]:py-1.75 [&_input]:px-2.5 [&_input]:text-[14px] [&_input]:placeholder:text-muted-foreground [&>small]:block [&>small]:text-right [&>small]:mt-1 max-[540.001px]:[&_input]:text-[12px] max-[540.001px]:[&_input]:pl-1.5 max-[540.001px]:[&_button]:text-[12px] max-[540.001px]:[&_button]:px-2.25 max-[540.001px]:[&>small]:text-[10px]"
+        noValidate
         onSubmit={send}
       >
         <div>
-          <input
+          <Input
+            unstyled
             id="chat-input"
             aria-label="Mensagem"
             placeholder="Escreva para o Nexo..."
-            value={text}
+            {...messageForm.register("text")}
+            aria-invalid={!!messageForm.formState.errors.text}
+            aria-describedby={
+              messageForm.formState.errors.text ? "message-error" : undefined
+            }
             maxLength={8000}
             required
             disabled={!canReply || mode === "new"}
-            onChange={(e) => setText(e.target.value)}
           />
           <Button
             type="submit"
@@ -357,6 +350,15 @@ export function ChatWorkspace(props: WorkspaceProps) {
             Enviar
           </Button>
         </div>
+        {messageForm.formState.errors.text && (
+          <section>
+            <FieldError
+              id="message-error"
+              className="mt-1.5 text-red-700"
+              errors={[messageForm.formState.errors.text]}
+            />
+          </section>
+        )}
         <small className="text-[12px] text-muted-foreground">
           {conversation?.status === "closed"
             ? "Este atendimento foi encerrado. O histórico foi preservado."

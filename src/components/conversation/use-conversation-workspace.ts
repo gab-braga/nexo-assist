@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  CreateFormSchema,
+  MessageFormSchema,
+  type CreateFormValues,
+  type MessageFormValues,
+} from "@/lib/schemas/conversation-forms";
 import { useRouter } from "next/navigation";
 import {
   createConversation,
@@ -33,8 +41,15 @@ export function useConversationWorkspace({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const [text, setText] = useState("");
-  const [subject, setSubject] = useState("");
+  const messageForm = useForm<MessageFormValues>({
+    resolver: zodResolver(MessageFormSchema),
+    defaultValues: { text: "" },
+  });
+  const createForm = useForm<CreateFormValues>({
+    resolver: zodResolver(CreateFormSchema),
+    defaultValues: { subject: "" },
+  });
+  const text = useWatch({ control: messageForm.control, name: "text" });
   const [request, setRequest] = useState<{
     id: string;
     text: string;
@@ -62,8 +77,8 @@ export function useConversationWorkspace({
     return () => clearInterval(timer);
   }, [router, pending, older]);
 
-  function create(event: React.FormEvent) {
-    event.preventDefault();
+  const create = createForm.handleSubmit(({ subject }) => {
+    if (pending) return;
     setError("");
     const id = creationId ?? crypto.randomUUID();
     setCreationId(id);
@@ -73,15 +88,14 @@ export function useConversationWorkspace({
         setError(result.error);
         return;
       }
-      setSubject("");
+      createForm.reset();
       setCreationId(null);
       router.push(href({ conversation: result.data._id, cursor: null }));
     });
-  }
+  });
 
-  function send(event: React.FormEvent) {
-    event.preventDefault();
-    if (!conversation) return;
+  const send = messageForm.handleSubmit(({ text }) => {
+    if (!conversation || pending) return;
     setError("");
     const next =
       request?.text === text && request.conversationId === conversation._id
@@ -98,11 +112,11 @@ export function useConversationWorkspace({
         setError(result.error);
         return;
       }
-      setText("");
+      messageForm.reset();
       setRequest(null);
       router.refresh();
     });
-  }
+  });
 
   function change(operation: "assume" | "release" | "close") {
     if (!conversation) return;
@@ -127,9 +141,8 @@ export function useConversationWorkspace({
     pending,
     error,
     text,
-    setText,
-    subject,
-    setSubject,
+    messageForm,
+    createForm,
     setCreationId,
     href,
     create,

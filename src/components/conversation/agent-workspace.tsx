@@ -15,10 +15,12 @@ import {
   LogOut,
   MessageCircle,
   MoreVertical,
-  Search,
   Send,
   X,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { FieldError } from "@/components/ui/field";
+import { ConversationFilters } from "./conversation-filters";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Avatar } from "@/components/avatar";
@@ -70,7 +72,7 @@ export function AgentWorkspace(props: WorkspaceProps) {
     pending,
     error,
     text,
-    setText,
+    messageForm,
     href,
     send,
     change,
@@ -155,29 +157,12 @@ export function AgentWorkspace(props: WorkspaceProps) {
           <h1>Conversas</h1>
           <Status pill>Atendente</Status>
         </div>
-        <form
-          data-visual="search-box"
-          className="mx-1.75 mb-3 flex items-center gap-2.5 py-2 px-3.25 bg-muted rounded-[30px] text-muted-foreground text-[12px] [&>input]:w-full [&>input]:min-w-0 [&>input]:bg-transparent"
-          action="/agent"
-        >
-          <Search size={15} />
-          <input
-            aria-label="Pesquisar atendimentos"
-            name="search"
-            defaultValue={search}
-            maxLength={100}
-            placeholder="Pesquisar conversa ou atendimento"
-            className="[-webkit-tap-highlight-color:transparent] outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-          />
-          <input type="hidden" name="status" value={status} />
-          <button
-            aria-label="Aplicar filtros"
-            type="submit"
-            className="sr-only"
-          >
-            Pesquisar
-          </button>
-        </form>
+        <ConversationFilters
+          role={user.role}
+          search={search}
+          status={status}
+          compact
+        />
         <div
           data-visual="conversation-tabs"
           className="flex gap-1 px-1.75 pb-2.5 [&>button]:rounded-[30px] [&>button]:bg-muted [&>button]:py-1.25 [&>button]:px-2.25 [&>button]:text-[12px] [&>button]:whitespace-nowrap [&_b]:font-medium [&_b]:ml-0.75 max-[800.001px]:gap-0.75 max-[800.001px]:flex-wrap max-[800.001px]:[&>button]:text-[10px] max-[800.001px]:[&>button]:py-1 max-[800.001px]:[&>button]:px-1.5 max-[650.001px]:[&>button]:text-[12px] max-[650.001px]:[&>button]:py-1.25 max-[650.001px]:[&>button]:px-2.25"
@@ -438,20 +423,27 @@ export function AgentWorkspace(props: WorkspaceProps) {
                   </Button>
                 )}
               </div>
-              <input
+              <Input
+                unstyled
                 disabled
                 placeholder="Assuma o atendimento para responder"
               />
             </>
           ) : (
-            <form onSubmit={send}>
-              <input
+            <form noValidate onSubmit={send}>
+              <Input
+                unstyled
                 aria-label="Mensagem"
                 placeholder="Escreva sua resposta..."
-                value={text}
+                {...messageForm.register("text")}
+                aria-invalid={!!messageForm.formState.errors.text}
+                aria-describedby={
+                  messageForm.formState.errors.text
+                    ? "message-error"
+                    : undefined
+                }
                 maxLength={8000}
                 required
-                onChange={(e) => setText(e.target.value)}
               />
               <Button
                 data-visual="send-circle"
@@ -465,6 +457,11 @@ export function AgentWorkspace(props: WorkspaceProps) {
               </Button>
             </form>
           )}
+          <FieldError
+            id="message-error"
+            className="mt-1.5 text-red-700"
+            errors={[messageForm.formState.errors.text]}
+          />
         </footer>
       </section>
       {visibleDetails && (
@@ -570,36 +567,7 @@ export function AgentWorkspace(props: WorkspaceProps) {
         </Button>
       </Dialog>
       <Dialog open={all} onOpenChange={setAll} title="Atendimentos">
-        <form
-          action={user.role === "agent" ? "/agent" : "/chat"}
-          className="flex flex-wrap gap-2 items-center"
-        >
-          <input
-            aria-label="Pesquisar atendimentos"
-            name="search"
-            defaultValue={search}
-            maxLength={100}
-            placeholder="Pesquisar atendimentos"
-            className="min-w-0 flex-1 bg-transparent outline-none text-[12px]"
-          />
-          <select
-            aria-label="Filtrar atendimentos"
-            name="status"
-            defaultValue={status}
-            className="min-w-0 bg-transparent text-[12px]"
-          >
-            <option value="all">Todos</option>
-            <option value="waiting">Aguardando</option>
-            <option value="active">Em atendimento</option>
-            <option value="closed">Encerrados</option>
-            {user.role === "agent" && (
-              <option value="mine">Meus atendimentos</option>
-            )}
-          </select>
-          <button aria-label="Aplicar filtros" type="submit">
-            <Search size={15} />
-          </button>
-        </form>
+        <ConversationFilters role={user.role} search={search} status={status} />
         {list.items.map((item) => (
           <Link
             key={item._id}
