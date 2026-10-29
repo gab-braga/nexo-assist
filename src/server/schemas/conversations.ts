@@ -1,6 +1,5 @@
 import { z } from "zod";
 import {
-  SubjectSchema,
   MessageTextSchema,
   SearchSchema,
   StatusSchema,
@@ -12,11 +11,6 @@ export const ListSchema = z.object({
   search: SearchSchema.default(""),
   cursor: z.object({ date: z.iso.datetime(), id: IdSchema }).optional(),
   limit: z.number().int().min(1).max(50).default(20),
-});
-
-export const CreateSchema = z.object({
-  requestId: IdSchema,
-  subject: SubjectSchema,
 });
 
 export const MessageSchema = z.object({

@@ -71,8 +71,8 @@ try {
     assert.deepEqual(await customerPage.evaluate(() => Object.keys(localStorage)), []);
     await customerPage.goto(baseURL + "/agent");
     await customerPage.waitForURL("**/chat");
-    await customerPage.getByLabel("Novo atendimento").fill("Teste de atendimento persistente");
-    await customerPage.getByRole("button", { name: "Iniciar atendimento" }).click();
+    await customerPage.getByLabel("Mensagem", { exact: true }).fill("Teste de atendimento persistente");
+    await customerPage.getByRole("button", { name: "Enviar mensagem" }).click();
     await customerPage.waitForURL(/conversation=/);
     const id = new URL(customerPage.url()).searchParams.get("conversation");
     conversationIds.push(id);
@@ -143,6 +143,7 @@ try {
       for (const id of conversationIds) {
         await db.collection("messages").deleteMany({ conversationId: id });
         await db.collection("conversation_events").deleteMany({ conversationId: id });
+        await db.collection("agent_runs").deleteMany({ conversationId: id });
         await db.collection("conversations").deleteOne({ _id: id });
       }
       for (const account of accounts) await db.collection("users").deleteOne({ _id: account.uid });

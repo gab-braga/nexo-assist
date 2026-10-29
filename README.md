@@ -4,6 +4,8 @@ O serviço de chamados da Fase 2 está documentado em [docs/fase-2-servico-de-ch
 
 O núcleo de IA da Fase 3 usa Mastra e OpenAI no servidor, com streaming no chat existente. Consulte [configuração, ferramentas, limites, testes e pendências](docs/fase-3-agente-mastra.md). Defina `OPENAI_API_KEY` e, opcionalmente, `NEXO_AI_MODEL` no ambiente local. O fluxo visual completo de confirmação e a memória avançada permanecem para as próximas fases.
 
+O chat inicia diretamente pelo campo de mensagem: Enter envia e Shift + Enter insere uma quebra de linha. A primeira mensagem válida cria conversa, mensagem e execução em uma única transação; o título é um resumo determinístico de até dez palavras/80 caracteres, sem chamada adicional ao modelo. Abrir a tela ou selecionar “Novo atendimento” não cria registros. Reenvios de resultado incerto preservam os mesmos UUIDs para recuperar o resultado sem duplicar a conversa ou processar a mensagem novamente.
+
 Atendimentos de TI com Next.js 16 App Router, Firebase Authentication e Firestore Enterprise com compatibilidade MongoDB. O domínio contém conversas, mensagens, chamados e eventos de atendimento, com agente Mastra no servidor e serviço de chamados simulado persistido. Integração com service desk externo fica para uma etapa posterior.
 
 ## Configuração

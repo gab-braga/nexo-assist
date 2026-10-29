@@ -43,7 +43,7 @@ export type AgentRun = {
 };
 
 export type AgentStreamEvent =
-  | { type: "started"; runId: string }
+  | { type: "started"; runId: string; conversationId?: string }
   | { type: "delta"; text: string }
   | { type: "completed"; message: MessageDTO }
   | { type: "error"; code: string; error: string };

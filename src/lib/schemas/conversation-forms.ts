@@ -1,11 +1,5 @@
 import { z } from "zod";
 
-export const SubjectSchema = z
-  .string()
-  .trim()
-  .min(3, "Descreva o assunto com pelo menos 3 caracteres.")
-  .max(160, "O assunto deve ter no máximo 160 caracteres.");
-
 export const MessageTextSchema = z
   .string()
   .trim()
@@ -25,13 +19,11 @@ export const StatusSchema = z.enum([
   "mine",
 ]);
 
-export const CreateFormSchema = z.object({ subject: SubjectSchema });
 export const MessageFormSchema = z.object({ text: MessageTextSchema });
 export const FilterFormSchema = z.object({
   search: SearchSchema,
   status: StatusSchema,
 });
 
-export type CreateFormValues = z.infer<typeof CreateFormSchema>;
 export type MessageFormValues = z.infer<typeof MessageFormSchema>;
 export type FilterFormValues = z.infer<typeof FilterFormSchema>;

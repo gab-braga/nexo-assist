@@ -25,6 +25,7 @@ export type Conversation = {
   aiMessageCount?: number;
   aiActiveRunId?: string | null;
   aiControlVersion?: number;
+  initialMessageId?: string;
 };
 
 export type Message = {

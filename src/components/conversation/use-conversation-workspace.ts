@@ -1,22 +1,26 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  CreateFormSchema,
   MessageFormSchema,
-  type CreateFormValues,
   type MessageFormValues,
 } from "@/lib/schemas/conversation-forms";
 import { useRouter } from "next/navigation";
 import {
-  createConversation,
   sendMessage,
   transitionConversation,
 } from "@/server/actions/conversations";
 import type { ConversationDTO, MessageDTO, SessionUser } from "@/types/domain";
 import { AgentStreamError, consumeAgentStream } from "@/lib/agent-stream";
+import { conversationTitle } from "@/lib/conversation-title";
 import type {
   listConversations,
   getMessages,
@@ -32,9 +36,16 @@ export type WorkspaceProps = {
   older: boolean;
 };
 
+type PendingMessage = {
+  id: string;
+  text: string;
+  conversationId: string;
+  startConversation?: true;
+};
+
 export function useConversationWorkspace({
   user,
-  conversation,
+  conversation: initialConversation,
   search,
   status,
   older,
@@ -43,22 +54,21 @@ export function useConversationWorkspace({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [streamMessages, setStreamMessages] = useState<MessageDTO[]>([]);
+  const [createdConversation, setCreatedConversation] =
+    useState<ConversationDTO | null>(null);
+  const [startingNew, setStartingNew] = useState(false);
+  const conversation = startingNew
+    ? createdConversation
+    : (initialConversation ?? createdConversation);
   const messageForm = useForm<MessageFormValues>({
     resolver: zodResolver(MessageFormSchema),
     defaultValues: { text: "" },
   });
-  const createForm = useForm<CreateFormValues>({
-    resolver: zodResolver(CreateFormSchema),
-    defaultValues: { subject: "" },
-  });
   const text = useWatch({ control: messageForm.control, name: "text" });
-  const [request, setRequest] = useState<{
-    id: string;
-    text: string;
-    conversationId: string;
-  } | null>(null);
-
-  const [creationId, setCreationId] = useState<string | null>(null);
+  const request = useRef<PendingMessage | null>(null);
+  const sending = useRef(false);
+  const generation = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
   const base = user.role === "agent" ? "/agent" : "/chat";
 
   function href(changes: Record<string, string | null>) {
@@ -73,128 +83,198 @@ export function useConversationWorkspace({
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (!document.hidden && !pending && !older)
+      // A refresh would remount the newly-created route and discard a failed
+      // first-send draft. Refresh it only after success or explicit navigation.
+      if (!document.hidden && !pending && !older && !createdConversation)
         startTransition(() => router.refresh());
     }, 10000);
     return () => clearInterval(timer);
-  }, [router, pending, older]);
+  }, [router, pending, older, createdConversation]);
 
-  const create = createForm.handleSubmit(({ subject }) => {
-    if (pending) return;
+  function newConversation() {
+    generation.current++;
+    activeRequest.current?.abort();
+    sending.current = false;
+    request.current = null;
+    setStartingNew(true);
+    setCreatedConversation(null);
+    setStreamMessages([]);
     setError("");
-    const id = creationId ?? crypto.randomUUID();
-    setCreationId(id);
-    startTransition(async () => {
-      const result = await createConversation({ requestId: id, subject });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      createForm.reset();
-      setCreationId(null);
-      router.push(href({ conversation: result.data._id, cursor: null }));
-    });
-  });
+    messageForm.reset({ text: "" });
+    // Show the empty composer immediately, but wait for the new route before
+    // accepting input; the old conversation must never receive the next draft.
+    startTransition(() => router.push(base));
+  }
 
-  const send = messageForm.handleSubmit(({ text }) => {
-    if (!conversation || pending) return;
+  function submitMessage({ text }: MessageFormValues) {
+    if (sending.current || pending || (!conversation && user.role !== "chat"))
+      return;
+    sending.current = true; // Enter/double click can precede a React render.
+    const attempt = generation.current;
     setError("");
-    const next =
-      request?.text === text && request.conversationId === conversation._id
-        ? request
-        : { id: crypto.randomUUID(), text, conversationId: conversation._id };
-    setRequest(next);
+    const next: PendingMessage =
+      request.current?.text === text &&
+      (!conversation || request.current.conversationId === conversation._id)
+        ? request.current
+        : {
+            id: crypto.randomUUID(),
+            text,
+            conversationId: conversation?._id ?? crypto.randomUUID(),
+            ...(!conversation ? { startConversation: true as const } : {}),
+          };
+    request.current = next;
     startTransition(async () => {
-      if (
-        user.role === "chat" &&
-        conversation.aiEnabled &&
-        !conversation.aiHandoff &&
-        conversation.status === "waiting"
-      ) {
-        const timestamp = new Date().toISOString();
-        const previewId = `stream-${next.id}`;
-        setStreamMessages([
-          {
-            _id: next.id,
-            conversationId: conversation._id,
-            authorId: user.uid,
-            authorName: user.name,
-            role: "chat",
-            text: next.text,
-            createdAt: timestamp,
-          },
-          {
-            _id: previewId,
-            conversationId: conversation._id,
-            authorId: "nexo-assist",
-            authorName: "Nexo Assist",
-            role: "assistant",
-            text: "Processando sua mensagem…",
-            createdAt: timestamp,
-          },
-        ]);
-        let streamed = "";
-        try {
-          const response = await fetch("/api/agent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              requestId: next.id,
-              conversationId: conversation._id,
+      try {
+        if (
+          user.role === "chat" &&
+          (!conversation ||
+            (conversation.aiEnabled &&
+              !conversation.aiHandoff &&
+              conversation.status === "waiting"))
+        ) {
+          const timestamp = new Date().toISOString();
+          const previewId = `stream-${next.id}`;
+          const controller = new AbortController();
+          activeRequest.current = controller;
+          let accepted = false;
+          setStreamMessages([
+            {
+              _id: next.id,
+              conversationId: next.conversationId,
+              authorId: user.uid,
+              authorName: user.name,
+              role: "chat",
               text: next.text,
-            }),
-          });
-          await consumeAgentStream(response, (event) => {
-            if (event.type === "delta") {
-              streamed += event.text;
-              setStreamMessages((messages) =>
-                messages.map((message) =>
-                  message._id === previewId
-                    ? { ...message, text: streamed }
-                    : message,
-                ),
-              );
-            } else if (event.type === "completed")
-              setStreamMessages((messages) =>
-                messages.map((message) =>
-                  message._id === previewId ? event.message : message,
-                ),
-              );
-          });
-          messageForm.reset();
-          setRequest(null);
-        } catch (failure) {
-          setError(
-            failure instanceof Error
-              ? failure.message
-              : "Não foi possível concluir o atendimento.",
-          );
-          setStreamMessages([]);
-          // Terminal failures need a new explicit attempt; uncertain network
-          // outcomes retain the ID to reconcile rather than repeat execution.
-          if (
-            failure instanceof AgentStreamError &&
-            failure.code !== "RUN_IN_PROGRESS"
-          )
-            setRequest(null);
+              createdAt: timestamp,
+            },
+            {
+              _id: previewId,
+              conversationId: next.conversationId,
+              authorId: "nexo-assist",
+              authorName: "Nexo Assist",
+              role: "assistant",
+              text: "Processando sua mensagem…",
+              createdAt: timestamp,
+            },
+          ]);
+          let streamed = "";
+          try {
+            const response = await fetch("/api/agent", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: controller.signal,
+              body: JSON.stringify({
+                requestId: next.id,
+                conversationId: next.conversationId,
+                text: next.text,
+                ...(next.startConversation ? { startConversation: true } : {}),
+              }),
+            });
+            await consumeAgentStream(response, (event) => {
+              if (generation.current !== attempt) return;
+              if (event.type === "started") {
+                accepted = true;
+                if (next.startConversation) {
+                  setCreatedConversation({
+                    _id: next.conversationId,
+                    subject: conversationTitle(next.text),
+                    customerId: user.uid,
+                    customerName: user.name,
+                    status: "waiting",
+                    agentId: null,
+                    agentName: null,
+                    aiEnabled: true,
+                    initialMessageId: next.id,
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                    version: 1,
+                  });
+                  // Update Next's URL without unmounting the reader or resending on mount.
+                  window.history.pushState(
+                    null,
+                    "",
+                    href({
+                      conversation: next.conversationId,
+                      cursor: null,
+                      before: null,
+                    }),
+                  );
+                }
+              } else if (event.type === "delta") {
+                streamed += event.text;
+                setStreamMessages((messages) =>
+                  messages.map((message) =>
+                    message._id === previewId
+                      ? { ...message, text: streamed }
+                      : message,
+                  ),
+                );
+              } else if (event.type === "completed") {
+                setStreamMessages((messages) =>
+                  messages.map((message) =>
+                    message._id === previewId ? event.message : message,
+                  ),
+                );
+              }
+            });
+            if (generation.current !== attempt) return;
+            messageForm.reset();
+            request.current = null;
+            router.refresh();
+          } catch (failure) {
+            if (generation.current !== attempt) return;
+            setError(
+              failure instanceof AgentStreamError
+                ? failure.message
+                : "A resposta foi interrompida. Seu texto foi preservado; tente novamente para verificar o resultado.",
+            );
+            setStreamMessages((messages) =>
+              accepted
+                ? messages.filter((message) => message.role === "chat")
+                : [],
+            );
+            // Uncertain outcomes keep their IDs; known terminal failures allow
+            // a subsequent explicit attempt, never an automatic second run.
+            if (
+              failure instanceof AgentStreamError &&
+              !["RUN_IN_PROGRESS", "CONFLICT"].includes(failure.code)
+            )
+              request.current = null;
+            if (!next.startConversation && !createdConversation)
+              router.refresh();
+          }
+          return;
         }
+        const result = await sendMessage({
+          requestId: next.id,
+          text: next.text,
+          conversationId: next.conversationId,
+        });
+        if (generation.current !== attempt) return;
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        messageForm.reset();
+        request.current = null;
         router.refresh();
-        return;
+      } catch {
+        if (generation.current === attempt)
+          setError(
+            "Não foi possível enviar a mensagem. Seu texto foi preservado; tente novamente.",
+          );
+      } finally {
+        if (generation.current === attempt) {
+          sending.current = false;
+          activeRequest.current = null;
+        }
       }
-      const result = await sendMessage({
-        requestId: next.id,
-        text: next.text,
-        conversationId: next.conversationId,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      messageForm.reset();
-      setRequest(null);
-      router.refresh();
     });
-  });
+  }
+
+  function send(event: FormEvent<HTMLFormElement>) {
+    return messageForm.handleSubmit(submitMessage)(event);
+  }
 
   function change(operation: "assume" | "release" | "close") {
     if (!conversation) return;
@@ -210,24 +290,23 @@ export function useConversationWorkspace({
     });
   }
 
-  const canReply =
-    conversation &&
-    conversation.status !== "closed" &&
-    (user.role === "chat" || conversation.agentId === user.uid);
+  const canReply = conversation
+    ? conversation.status !== "closed" &&
+      (user.role === "chat" || conversation.agentId === user.uid)
+    : user.role === "chat";
 
   return {
+    conversation,
     pending,
     error,
     streamMessages,
     text,
     messageForm,
-    createForm,
-    setCreationId,
     href,
-    create,
     send,
     change,
     canReply,
+    newConversation,
     navigate: router.push,
   };
 }

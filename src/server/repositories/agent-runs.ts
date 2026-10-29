@@ -6,6 +6,9 @@ import type { Conversation, Message, SessionUser } from "@/types/domain";
 import type { AgentRun, AgentAudit } from "@/types/ai";
 import { AI_LIMITS } from "@/server/ai/config";
 import { PROMPT_VERSION } from "@/server/ai/prompts/nexo";
+import type { AgentTurnInput } from "@/server/ai/schemas";
+import { createConversationRecord } from "./conversations";
+import { conversationTitle } from "@/lib/conversation-title";
 
 export function assertAgentConversation(
   conversation: Conversation | null,
@@ -32,7 +35,7 @@ export function assertAgentConversation(
 export interface AgentRunRepository {
   begin(
     user: SessionUser,
-    input: { requestId: string; conversationId: string; text: string },
+    input: AgentTurnInput,
     model: string,
   ): Promise<AgentRun>;
   history(conversationId: string): Promise<Message[]>;
@@ -55,12 +58,39 @@ export const agentRunRepository: AgentRunRepository = {
       return await session.withTransaction(async () => {
         const conversations = db.collection<Conversation>("conversations");
         const runs = db.collection<AgentRun>("agent_runs");
-        const conversation = await conversations.findOne(
+        let conversation = await conversations.findOne(
           { _id: input.conversationId },
           { session },
         );
+        if (!conversation && input.startConversation) {
+          const now = new Date();
+          conversation = {
+            _id: input.conversationId,
+            customerId: user.uid,
+            customerName: user.name,
+            subject: conversationTitle(input.text),
+            status: "waiting",
+            agentId: null,
+            agentName: null,
+            createdAt: now,
+            updatedAt: now,
+            version: 0,
+            aiEnabled: true,
+            initialMessageId: input.requestId,
+          };
+          // The first message, run and conversation either all commit or all roll back.
+          await createConversationRecord(conversation, session);
+        }
         if (!conversation || conversation.customerId !== user.uid)
           throw new AppError("NOT_FOUND", "Atendimento não encontrado.");
+        if (
+          input.startConversation &&
+          conversation.initialMessageId !== input.requestId
+        )
+          throw new AppError(
+            "CONFLICT",
+            "O primeiro envio desta conversa já foi registrado.",
+          );
         const hash = createHash("sha256").update(input.text).digest("hex");
         const previous = await runs.findOne(
           { _id: input.requestId },
@@ -132,20 +162,18 @@ export const agentRunRepository: AgentRunRepository = {
           usage: null,
         };
         await runs.insertOne(run, { session });
-        await db
-          .collection<Message>("messages")
-          .insertOne(
-            {
-              _id: input.requestId,
-              conversationId: input.conversationId,
-              authorId: user.uid,
-              authorName: user.name,
-              role: "chat",
-              text: input.text,
-              createdAt: now,
-            },
-            { session },
-          );
+        await db.collection<Message>("messages").insertOne(
+          {
+            _id: input.requestId,
+            conversationId: input.conversationId,
+            authorId: user.uid,
+            authorName: user.name,
+            role: "chat",
+            text: input.text,
+            createdAt: now,
+          },
+          { session },
+        );
         const updated = await conversations.updateOne(
           { _id: conversation._id, version: conversation.version },
           {
@@ -161,6 +189,20 @@ export const agentRunRepository: AgentRunRepository = {
           );
         return run;
       });
+    } catch (error) {
+      // Concurrent initial inserts may report duplicate-key instead of a retryable
+      // transaction conflict. Never repeat the model invocation or change IDs.
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === 11000
+      )
+        throw new AppError(
+          "CONFLICT",
+          "Envio concorrente. Repita a mesma requisição para verificar o resultado.",
+        );
+      throw error;
     } finally {
       await session.endSession();
     }

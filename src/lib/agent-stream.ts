@@ -2,7 +2,11 @@ import { z } from "zod";
 import type { AgentStreamEvent } from "@/types/ai";
 
 const eventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("started"), runId: z.string() }),
+  z.object({
+    type: z.literal("started"),
+    runId: z.string(),
+    conversationId: z.string().optional(),
+  }),
   z.object({ type: z.literal("delta"), text: z.string() }),
   z.object({ type: z.literal("error"), code: z.string(), error: z.string() }),
   z.object({

@@ -45,13 +45,16 @@ export async function findMessages(filter: Filter<Message>, limit: number) {
     .toArray();
 }
 
-export async function createConversationRecord(record: Conversation) {
+export async function createConversationRecord(
+  record: Conversation,
+  session?: ClientSession,
+) {
   const { conversations } = await conversationCollections();
   const { _id, ...fields } = record;
   await conversations.updateOne(
     { _id },
     { $setOnInsert: fields },
-    { upsert: true },
+    { upsert: true, session },
   );
 }
 

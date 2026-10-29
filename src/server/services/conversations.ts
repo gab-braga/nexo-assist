@@ -5,7 +5,6 @@ import { requireUser } from "@/auth/guards";
 import { canReadConversation, canSendMessage } from "@/auth/policy";
 import { AppError } from "@/server/lib/errors";
 import {
-  createConversationRecord,
   appendMessage,
   transitionRecord,
   findConversation,
@@ -13,7 +12,6 @@ import {
   findMessages,
 } from "@/server/repositories/conversations";
 import {
-  CreateSchema,
   HistorySchema,
   ListSchema,
   MessageSchema,
@@ -113,26 +111,6 @@ export async function getMessages(input: unknown) {
     nextCursor:
       rows.length > 50 && last ? { date: last.createdAt, id: last._id } : null,
   };
-}
-
-export async function createConversation(input: unknown) {
-  const user = await requireUser("chat");
-  const data = CreateSchema.parse(input);
-  const now = new Date();
-  await createConversationRecord({
-    _id: data.requestId,
-    customerId: user.uid,
-    customerName: user.name,
-    subject: data.subject,
-    status: "waiting",
-    agentId: null,
-    agentName: null,
-    createdAt: now,
-    updatedAt: now,
-    version: 0,
-    aiEnabled: true,
-  });
-  return getConversation(data.requestId);
 }
 
 export async function sendMessage(input: unknown) {

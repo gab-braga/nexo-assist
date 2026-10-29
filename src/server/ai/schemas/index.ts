@@ -7,8 +7,11 @@ export const AgentTurnSchema = z
     requestId: IdSchema,
     conversationId: IdSchema,
     text: MessageTextSchema,
+    startConversation: z.literal(true).optional(),
   })
   .strict();
+
+export type AgentTurnInput = z.infer<typeof AgentTurnSchema>;
 
 export const IntentSchema = z.enum([
   "knowledge",

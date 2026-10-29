@@ -4,10 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { ArrowUp, Plus } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { FieldError } from "@/components/ui/field";
 import { ConversationFilters } from "./conversation-filters";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Status } from "@/components/status";
 import {
@@ -38,17 +36,16 @@ const date = (value: string) =>
   });
 
 export function ChatWorkspace(props: WorkspaceProps) {
-  const { user, list, conversation, history, search, status, older } = props;
+  const { user, list, history, search, status, older } = props;
   const {
     pending,
     error,
     streamMessages,
     text,
     messageForm,
-    createForm,
-    setCreationId,
+    conversation,
+    newConversation,
     href,
-    create,
     send,
     canReply,
     navigate,
@@ -59,9 +56,8 @@ export function ChatWorkspace(props: WorkspaceProps) {
       (message) => !history?.items.some((saved) => saved._id === message._id),
     ),
   ];
-  const [mode, setMode] = useState<"new" | "consult">(
-    conversation ? "consult" : "new",
-  );
+  const [showHistory, setShowHistory] = useState(false);
+  const mode = conversation || showHistory ? "consult" : "new";
 
   return (
     <main
@@ -69,6 +65,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
       className={cn(
         "group/chat max-w-202 mx-auto relative h-[calc(100dvh-64px)] flex flex-col pt-18.25 max-[1250.001px]:mx-8 max-[1250.001px]:max-w-none max-[800.001px]:mx-5 max-[800.001px]:pt-11.25 max-[540.001px]:h-[calc(100dvh-58px)] max-[540.001px]:mx-3 max-[540.001px]:pt-10.5",
         mode === "consult" && "pt-13.5",
+        mode === "new" && "justify-center pt-0 max-[1250.001px]:pt-0 max-[800.001px]:pt-0 max-[540.001px]:pt-0",
       )}
       data-mode={mode}
     >
@@ -78,21 +75,23 @@ export function ChatWorkspace(props: WorkspaceProps) {
       >
         <button
           onClick={() => {
-            setMode("new");
-            if (conversation)
-              navigate(href({ conversation: null, before: null }));
+            setShowHistory(false);
+            newConversation();
           }}
         >
           <Plus size={13} />
           Novo atendimento
         </button>
-        <button onClick={() => setMode("consult")}>
+        <button onClick={() => setShowHistory(true)}>
           Consultar atendimentos
         </button>
       </div>
       <div
         data-visual="customer-transcript"
-        className="flex-1 min-h-0 overflow-auto scrollbar-thin pt-4.75 max-[540.001px]:pt-2"
+        className={cn(
+          "flex-1 min-h-0 overflow-auto scrollbar-thin pt-4.75 max-[540.001px]:pt-2",
+          mode === "new" && "flex-none pb-6 pt-0 text-center max-[540.001px]:pt-0",
+        )}
       >
         {error && (
           <p role="alert" className="text-sm text-red-700">
@@ -101,71 +100,12 @@ export function ChatWorkspace(props: WorkspaceProps) {
         )}
         {mode === "new" ? (
           <>
-            <div
-              data-visual="assistant-group"
-              className="mb-4.75 max-[540.001px]:mb-3.75"
-            >
-              <div
-                data-visual="assistant-bubble"
-                className="max-w-150.25 border border-border rounded-[4px_13px_13px_13px] py-3 px-3.75 leading-5.5 [&>strong]:block [&>strong]:mt-2.5 [&>strong]:mb-2 [&>strong]:font-semibold group-data-[mode=new]/chat:py-2.5 max-[800.001px]:text-[13px] max-[540.001px]:p-2.5 max-[540.001px]:text-[12px] max-[540.001px]:leading-5"
-              >
-                <p>Como podemos ajudar?</p>
-                <strong>Inicie um atendimento com a equipe de TI.</strong>
-              </div>
-              <section
-                data-visual="ticket-card"
-                className="mt-1.25 [&_h2]:text-[18px] [&_h2]:leading-6.25 [&_h2]:font-semibold [&_h2]:tracking-[-0.3px] [&_h2]:mb-1.25 [&_p]:text-[13px] [&_p]:text-[#425069] [&_p]:leading-5.25 max-[800.001px]:[&_h2]:text-[16px] max-[800.001px]:[&_p]:text-[12px] max-[540.001px]:[&_h2]:text-3.75 max-[540.001px]:[&_h2]:leading-5.25 overflow-hidden rounded-4.25 border border-border bg-card shadow-[0_1px_2px_#18233408,0_5px_14px_#18233403]"
-              >
-                <div
-                  data-visual="ticket-body"
-                  className="py-3.5 px-4.25 max-[540.001px]:p-3"
-                >
-                  <form onSubmit={create} noValidate>
-                    <Label
-                      htmlFor="subject"
-                      className="block text-[13px] mb-1.5"
-                    >
-                      Novo atendimento
-                    </Label>
-                    <Input
-                      unstyled
-                      id="subject"
-                      className="w-full border border-border rounded-lg p-2.5 text-[14px]"
-                      {...createForm.register("subject", {
-                        onChange: () => setCreationId(null),
-                      })}
-                      aria-invalid={!!createForm.formState.errors.subject}
-                      aria-describedby={
-                        createForm.formState.errors.subject
-                          ? "subject-error"
-                          : undefined
-                      }
-                      minLength={3}
-                      maxLength={160}
-                      required
-                      placeholder="Descreva o assunto do atendimento"
-                    />
-                    <FieldError
-                      id="subject-error"
-                      className="mt-1.5 text-red-700"
-                      errors={[createForm.formState.errors.subject]}
-                    />
-                    <div className="flex gap-2 mt-4">
-                      <Button type="submit" disabled={pending}>
-                        Iniciar atendimento
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setMode("consult")}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  </form>
-                </div>
-              </section>
-            </div>
+            <h1 className="text-[24px] font-semibold tracking-[-0.6px] max-[540.001px]:text-[22px]">
+              Como podemos ajudar?
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Descreva o que está acontecendo para começar.
+            </p>
           </>
         ) : (
           <>
@@ -340,13 +280,15 @@ export function ChatWorkspace(props: WorkspaceProps) {
       </div>
       <form
         data-visual="customer-composer"
-        className="pb-4 bg-card [&>div]:flex [&>div]:items-center [&>div]:p-1.25 [&>div]:border [&>div]:border-[#dfe2e7] [&>div]:rounded-[13px] [&>div]:min-h-12.25 [&_input]:flex-1 [&_input]:min-w-0 [&_input]:py-1.75 [&_input]:px-2.5 [&_input]:text-[14px] [&_input]:placeholder:text-muted-foreground [&>small]:block [&>small]:text-right [&>small]:mt-1 max-[540.001px]:[&_input]:text-[12px] max-[540.001px]:[&_input]:pl-1.5 max-[540.001px]:[&_button]:text-[12px] max-[540.001px]:[&_button]:px-2.25 max-[540.001px]:[&>small]:text-[10px]"
+        className="pb-4 bg-card [&>div]:flex [&>div]:items-center [&>div]:p-1.25 [&>div]:border [&>div]:border-[#dfe2e7] [&>div]:rounded-[13px] [&>div]:min-h-12.25 [&_textarea]:flex-1 [&_textarea]:min-w-0 [&_textarea]:py-1.75 [&_textarea]:px-2.5 [&_textarea]:text-[14px] [&_textarea]:placeholder:text-muted-foreground [&>small]:block [&>small]:text-right [&>small]:mt-1 max-[540.001px]:[&_textarea]:text-[12px] max-[540.001px]:[&_textarea]:pl-1.5 max-[540.001px]:[&_button]:text-[12px] max-[540.001px]:[&_button]:px-2.25 max-[540.001px]:[&>small]:text-[10px]"
         noValidate
         onSubmit={send}
+        aria-busy={pending}
       >
         <div>
-          <Input
-            unstyled
+          <textarea
+            rows={1}
+            className="max-h-40 resize-none bg-transparent outline-none [field-sizing:content]"
             id="chat-input"
             aria-label="Mensagem"
             placeholder="Escreva para o Nexo..."
@@ -357,15 +299,21 @@ export function ChatWorkspace(props: WorkspaceProps) {
             }
             maxLength={8000}
             required
-            disabled={!canReply || mode === "new"}
+            disabled={!canReply || pending}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
           />
           <Button
             type="submit"
             aria-label="Enviar mensagem"
-            disabled={pending || !canReply || mode === "new" || !text.trim()}
+            disabled={pending || !canReply || !text.trim()}
           >
             <ArrowUp />
-            Enviar
+            {pending ? "Enviando…" : "Enviar"}
           </Button>
         </div>
         {messageForm.formState.errors.text && (
@@ -380,7 +328,9 @@ export function ChatWorkspace(props: WorkspaceProps) {
         <small className="text-[12px] text-muted-foreground">
           {conversation?.status === "closed"
             ? "Este atendimento foi encerrado. O histórico foi preservado."
-            : "Seu histórico de atendimento é mantido nesta conversa."}
+            : mode === "new"
+              ? "Enter para enviar · Shift + Enter para quebrar a linha."
+              : "Seu histórico de atendimento é mantido nesta conversa."}
         </small>
       </form>
     </main>

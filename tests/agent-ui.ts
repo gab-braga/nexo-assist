@@ -3,21 +3,46 @@ import { chromium, expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { Conversation, Message } from "../src/types/domain";
+import type { AgentRun } from "../src/types/ai";
+import type { AgentTurnInput } from "../src/server/ai/schemas";
 loadEnvConfig(process.cwd());
 
 async function main() {
   const { database } = await import("../src/server/lib/mongodb");
   const { getAdminAuth } = await import("../src/server/lib/firebase/firebase-admin");
-  const { createConversationRecord } = await import("../src/server/repositories/conversations");
+  const { agentRunRepository } = await import("../src/server/repositories/agent-runs");
+  const { createAgentTurnService, agentError } = await import("../src/server/services/agent-turns");
+  const { createNexoAgent } = await import("../src/server/ai/agents/nexo-agent");
+  const { createNexoTools } = await import("../src/server/ai/tools");
+  const { ticketService } = await import("../src/server/services/tickets");
+  const { scriptedModel, textParts } = await import("./helpers/scripted-model");
+  const { conversationTitle } = await import("../src/lib/conversation-title");
+  const { Mastra } = await import("@mastra/core/mastra");
   const db = await database();
   const auth = getAdminAuth();
-  const id = randomUUID();
-  const uid = `agent-ui-${id}`;
+  const uid = `agent-ui-${randomUUID()}`;
   const base = process.env.TEST_BASE_URL || "http://localhost:3000";
+  const user = { uid, name: "Teste chat", email: `${uid}@example.test`, role: "chat" as const };
   let accountCreated = false;
+  let mode: "normal" | "creation-failure" | "lose-response" | "model-failure" = "normal";
+  let modelCalls = 0;
+  const requests: AgentTurnInput[] = [];
+  const conversationIds = new Set<string>();
+  const tools = createNexoTools({ tickets: ticketService, knowledge: async () => [] });
+  const start = createAgentTurnService({ repository: agentRunRepository, configured: () => {}, authenticate: async () => user,
+    agent: async () => {
+      modelCalls++;
+      const agent = createNexoAgent(scriptedModel(mode === "model-failure"
+        ? [[{ type: "error", error: new Error("Injected provider failure") }]]
+        : [textParts(`Resposta ${modelCalls} em streaming.`)]), tools);
+      new Mastra({ agents: { agent }, logger: false });
+      return agent;
+    },
+  });
   const browser = await chromium.launch({ channel: "chrome", headless: true });
+  let diagnostic: (() => Promise<unknown>) | undefined;
   try {
-    await auth.createUser({ uid, email: `${uid}@example.test`, displayName: "Teste chat" });
+    await auth.createUser({ uid, email: user.email, displayName: user.name });
     accountCreated = true;
     await auth.setCustomUserClaims(uid, { role: "chat" });
     const token = await auth.createCustomToken(uid);
@@ -27,43 +52,147 @@ async function main() {
     if (!response.ok) throw new Error("Temporary sign-in failed");
     const { idToken } = await response.json() as { idToken: string };
     const cookie = await auth.createSessionCookie(idToken, { expiresIn: 3600000 });
-    await createConversationRecord({ _id: id, customerId: uid, customerName: "Teste chat", subject: "Teste de integração do chat", status: "waiting", agentId: null, agentName: null, createdAt: new Date(), updatedAt: new Date(), version: 0, aiEnabled: true });
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await context.addCookies([{ name: "nexo-session", value: cookie, url: base, httpOnly: true, sameSite: "Lax" }]);
     const page = await context.newPage();
+    diagnostic = async () => ({ url: page.url(), alerts: await page.getByRole("alert").allTextContents(),
+      draft: await page.getByRole("textbox", { name: "Mensagem", exact: true }).inputValue(),
+      requests: requests.map(input => ({ id: input.requestId, conversationId: input.conversationId, start: input.startConversation })), modelCalls });
     const errors: string[] = [];
-    page.on("pageerror", error => errors.push(error.name));
-    const requests: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    // Only the provider/transport is intercepted in this test. Actual application
+    // services, transactions, messages and subsequent Server Component reads run
+    // against Firestore. No paid OpenAI request is made.
     await page.route("**/api/agent", async route => {
-      const input = route.request().postDataJSON() as { requestId: string; conversationId: string; text: string };
-      assert.equal(input.conversationId, id);
-      requests.push(input.requestId);
-      const events = requests.length === 1 ? [
-        { type: "started", runId: input.requestId }, { type: "delta", text: "Resposta em " }, { type: "delta", text: "streaming." },
-        { type: "completed", message: { _id: randomUUID(), conversationId: id, authorId: "nexo-assist", authorName: "Nexo Assist", role: "assistant", text: "Resposta em streaming.", createdAt: new Date().toISOString() } },
-      ] : [{ type: "error", code: "AI_PROVIDER_LIMIT", error: "O assistente está temporariamente indisponível." }];
-      await route.fulfill({ status: 200, contentType: "application/x-ndjson", body: events.map(event => JSON.stringify(event)).join("\n") + "\n" });
+      const input = route.request().postDataJSON() as AgentTurnInput;
+      requests.push(input);
+      conversationIds.add(input.conversationId);
+      if (mode === "creation-failure") {
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ code: "AI_UNAVAILABLE", error: "Falha temporária antes da criação." }) });
+        return;
+      }
+      try {
+        const events = [];
+        for await (const event of await start(input, new AbortController().signal)) events.push(event);
+        if (mode === "lose-response") {
+          mode = "normal";
+          await route.abort("failed"); // commit succeeded, but the client saw nothing
+          return;
+        }
+        await route.fulfill({ status: 200, contentType: "application/x-ndjson", body: events.map(event => JSON.stringify(event)).join("\n") + "\n" });
+      } catch (error) {
+        await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify(agentError(error)) });
+      }
     });
-    await page.goto(`${base}/chat?conversation=${id}`);
+
+    await page.goto(`${base}/chat`);
     const composer = page.getByRole("textbox", { name: "Mensagem", exact: true });
     const send = page.getByRole("button", { name: "Enviar mensagem", exact: true });
-    await composer.fill("Preciso de ajuda com a VPN");
-    await send.click();
-    await expect(page.getByText("Resposta em streaming.", { exact: true })).toHaveCount(1);
+    const newConversation = page.getByRole("button", { name: "Novo atendimento", exact: true });
+    const count = () => db.collection<Conversation>("conversations").countDocuments({ customerId: uid });
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(composer).toBeEnabled();
+      await expect(page.locator("#subject")).toHaveCount(0);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      const field = await composer.boundingBox();
+      const main = await page.locator('[data-visual="customer-chat"]').boundingBox();
+      assert.ok(field && main);
+      assert.ok(Math.abs(field.y + field.height / 2 - (main.y + main.height / 2)) < 130, "new composer should be near the page center");
+    }
+    assert.equal(await count(), 0);
+    await composer.fill("  "); await composer.press("Enter");
+    assert.equal(requests.length, 0);
+    assert.equal(await count(), 0);
+    await composer.fill("Meu notebook não conecta na VPN");
+    await composer.press("Shift+Enter");
+    await composer.pressSequentially("Erro 809 no Windows 11");
+    const firstText = await composer.inputValue();
+    assert.ok(firstText.includes("\n"));
+    // Simultaneous form submissions must share one request, not two generated IDs.
+    await composer.evaluate((element: HTMLTextAreaElement) => {
+      element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      element.form!.requestSubmit();
+    });
+    await expect(page).toHaveURL(/conversation=/);
+    await expect(page.getByText("Resposta 1 em streaming.", { exact: true })).toHaveCount(1);
     await expect(composer).toHaveValue("");
-    await composer.fill("Nova consulta");
+    assert.equal(requests.length, 1);
+    assert.equal(modelCalls, 1);
+    const firstId = new URL(page.url()).searchParams.get("conversation")!;
+    const first = await db.collection<Conversation>("conversations").findOne({ _id: firstId });
+    assert.equal(first?.subject, conversationTitle(firstText));
+    assert.equal(first?.customerId, uid);
+    assert.equal(await db.collection<Message>("messages").countDocuments({ conversationId: firstId }), 2);
+    assert.equal(await count(), 1);
+    await page.reload();
+    await expect(page.getByText("Resposta 1 em streaming.", { exact: true })).toHaveCount(1);
+    assert.equal(requests.length, 1); // reload does not submit the first message
+    await composer.fill("Tenho mais uma dúvida"); await composer.press("Enter");
+    await expect(page.getByText("Resposta 2 em streaming.", { exact: true })).toHaveCount(1);
+    assert.equal(requests[1].startConversation, undefined);
+    assert.equal(requests[1].conversationId, firstId);
+    assert.equal((await db.collection<Conversation>("conversations").findOne({ _id: firstId }))?.subject, first?.subject);
+
+    await newConversation.click();
+    await expect(page).not.toHaveURL(/conversation=/);
+    await expect(composer).toHaveValue("");
+    assert.equal(await count(), 1);
+    mode = "creation-failure";
+    await composer.fill("Preciso de acesso ao sistema"); await send.click();
+    await expect(page.getByRole("alert").filter({ hasText: "antes da criação" })).toHaveCount(1);
+    await expect(composer).toHaveValue("Preciso de acesso ao sistema");
+    assert.equal(await count(), 1);
+    mode = "normal";
     await send.click();
-    await expect(page.getByRole("alert").filter({ hasText: "temporariamente indisponível" })).toHaveCount(1);
-    await expect(send).toBeEnabled();
+    await expect(page.getByText("Resposta 3 em streaming.", { exact: true })).toHaveCount(1);
+    assert.equal(await count(), 2);
+
+    await newConversation.click(); await expect(composer).toHaveValue("");
+    await expect(page).not.toHaveURL(/conversation=/);
+    mode = "lose-response";
+    await composer.fill("Meu e-mail não funciona"); await send.click();
+    await expect(page.getByRole("alert").filter({ hasText: "texto foi preservado" })).toHaveCount(1);
+    await expect(composer).toHaveValue("Meu e-mail não funciona");
+    const uncertain = requests.at(-1)!;
+    assert.equal(await count(), 3);
+    assert.equal(modelCalls, 4);
     await send.click();
-    await expect.poll(() => requests.length).toBe(3);
-    assert.notEqual(requests[1], requests[2]); // terminal failure permits an explicit new attempt
+    await expect(page.getByText("Resposta 4 em streaming.", { exact: true })).toHaveCount(1);
+    assert.equal(requests.at(-1)?.requestId, uncertain.requestId);
+    assert.equal(requests.at(-1)?.conversationId, uncertain.conversationId);
+    assert.equal(modelCalls, 4);
+    assert.equal(await count(), 3);
+    assert.equal(await db.collection<Message>("messages").countDocuments({ conversationId: uncertain.conversationId }), 2);
+
+    await newConversation.click(); await expect(composer).toHaveValue("");
+    await expect(page).not.toHaveURL(/conversation=/);
+    mode = "model-failure";
+    await composer.fill("Meu teclado não funciona"); await send.click();
+    await expect(page).toHaveURL(/conversation=/);
+    await expect(page.getByRole("alert").filter({ hasText: "não conseguiu" })).toHaveCount(1);
+    await expect(composer).toHaveValue("Meu teclado não funciona");
+    const failedId = requests.at(-1)!.conversationId;
+    assert.equal(await db.collection<Message>("messages").countDocuments({ conversationId: failedId }), 1);
+    // The previous poll interval must not remount and erase the failed first text.
+    await page.waitForTimeout(10500);
+    await expect(composer).toHaveValue("Meu teclado não funciona");
+    await newConversation.click(); await expect(composer).toHaveValue("");
+    await composer.fill("Rascunho que não será enviado");
+    await newConversation.click(); await expect(composer).toHaveValue("");
+    assert.equal(await count(), 4);
     assert.deepEqual(errors, []);
-    console.log("Agent UI passed: existing authenticated chat, NDJSON rendering, single response bubble, preserved input on error and explicit retry. Provider intercepted only in browser test.");
+    console.log("Chat UI passed: centered multiline composer on desktop/mobile, atomic first send, automatic title, single invocation, reload, continuation, new chat without empty records, creation failure, post-commit network replay and provider failure without lost text.");
+  } catch (error) {
+    if (diagnostic) console.error("Chat test diagnostic:", await diagnostic());
+    throw error;
   } finally {
     await browser.close();
-    await db.collection<Message>("messages").deleteMany({ conversationId: id });
-    await db.collection<Conversation>("conversations").deleteOne({ _id: id, customerId: uid });
+    const ids = [...conversationIds];
+    await db.collection<AgentRun>("agent_runs").deleteMany({ customerId: uid });
+    await db.collection<Message>("messages").deleteMany({ conversationId: { $in: ids } });
+    await db.collection("conversation_events").deleteMany({ conversationId: { $in: ids } });
+    await db.collection<Conversation>("conversations").deleteMany({ customerId: uid });
     if (accountCreated) await auth.deleteUser(uid);
     await db.client.close();
   }

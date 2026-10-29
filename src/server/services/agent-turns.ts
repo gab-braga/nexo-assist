@@ -98,7 +98,11 @@ export function createAgentTurnService(deps: {
     const run = await deps.repository.begin(user, query, aiModelId());
     const authenticate = async () => deps.authenticate("chat");
     return (async function* (): AsyncGenerator<AgentStreamEvent> {
-      yield { type: "started", runId: run._id };
+      yield {
+        type: "started",
+        runId: run._id,
+        conversationId: run.conversationId,
+      };
       if (run.state !== "running") {
         if (run.state === "completed" && run.response)
           yield {

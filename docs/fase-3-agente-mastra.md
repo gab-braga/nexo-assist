@@ -88,6 +88,16 @@ O texto final após preparação é montado dos dados validados do serviço, exp
 
 Exige cookie Firebase válido, role chat, ownership, origem igual à origem pública da requisição e Content-Type JSON. Proxy de hospedagem deve preservar a origem pública corretamente; não são aceitas origens arbitrárias por headers do cliente. Corpo é limitado a 20 KB mesmo sem Content-Length, e texto mantém limite de 8.000 caracteres.
 
+### Início de conversa pela primeira mensagem
+
+Na tela inicial, o mesmo campo aceita a primeira mensagem, sem formulário de assunto. O cliente gera `conversationId` e `requestId` uma vez e acrescenta `startConversation: true` ao corpo acima. O servidor valida mensagem/sessão antes de criar qualquer registro e grava a conversa, a mensagem e a reserva do run na mesma transação. A action antiga de criação vazia foi removida; o repository interno continua disponível para persistência transacional e fixtures.
+
+O título usa até dez palavras e 80 caracteres da primeira mensagem, normalizando espaços e preservando Unicode; não usa LLM. `initialMessageId` vincula a conversa ao primeiro envio e impede que outra requisição seja tratada como primeira mensagem daquela conversa. Colisões e concorrência não disparam outro run; resultado já concluído é devolvido pelo recibo existente.
+
+O evento `started` inclui `conversationId`. Depois da confirmação do banco, a URL muda pela History API integrada ao Next.js e o chat existente exibe a primeira mensagem/stream sem remount ou efeito que reenvie a mensagem. Ao concluir, Server Components recuperam o estado persistido. Falhas antes da criação mantêm a tela e o texto; falhas depois da gravação conservam o texto e o vínculo com a conversa. Resultado incerto mantém os mesmos IDs na nova tentativa. “Novo atendimento” limpa o campo e aguarda a navegação antes de aceitar outra mensagem, evitando enviá-la à conversa anterior.
+
+O teste `test:agent:database` cobre primeira mensagem, concorrência, replay, título e rollback com Firestore e Mastra simulado. `test:agent:ui` também verifica campo centralizado em 390/768/1440 px, teclado, persistência ao recarregar, continuidade, ausência de conversas vazias, falha anterior à criação, perda da resposta depois do commit e falha do provedor. A revalidação final desse teste no navegador ficou pendente: a revisão automática de permissão expirou duas vezes; no sandbox, o runtime `tsx` falhou em `os.userInfo`. TypeScript, lint do código ativo, build, 32 testes locais e integração de banco passaram nesta refatoração. Não foram feitas novas chamadas pagas ao modelo.
+
 NDJSON do produto, sem exposição do stream interno Mastra:
 
 - `started`: runId.

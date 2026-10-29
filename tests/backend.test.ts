@@ -2,12 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { canReadConversation, canSendMessage } from "../src/auth/policy";
 import {
-  CreateSchema,
   ListSchema,
   MessageSchema,
   TransitionSchema,
 } from "../src/server/schemas/conversations";
 import type { Conversation, SessionUser } from "../src/types/domain";
+import { AgentTurnSchema } from "../src/server/ai/schemas";
+import { conversationTitle } from "../src/lib/conversation-title";
 
 const customer: SessionUser = {
   uid: "customer-a",
@@ -108,12 +109,28 @@ test("untrusted pagination, transitions and message content are bounded", () => 
   );
 });
 test("ownership and privileged fields cannot be injected via create input", () => {
-  const input = CreateSchema.parse({
+  const input = {
     requestId: conversation._id,
-    subject: " Ajuda ",
+    conversationId: conversation._id,
+    startConversation: true,
+    text: " Ajuda ",
+  };
+  assert.equal(AgentTurnSchema.safeParse({ ...input,
     customerId: "other",
     role: "agent",
     status: "closed",
-  });
-  assert.deepEqual(input, { requestId: conversation._id, subject: "Ajuda" });
+  }).success, false);
+  assert.equal(AgentTurnSchema.parse(input).text, "Ajuda");
+  assert.equal(AgentTurnSchema.safeParse({ ...input, text: " \n " }).success, false);
+  assert.equal(AgentTurnSchema.safeParse({ ...input, subject: "Título injetado" }).success, false);
+});
+
+test("automatic titles preserve short messages, normalize whitespace and bound Unicode safely", () => {
+  assert.equal(conversationTitle("  Meu notebook\n  não conecta na VPN.  "), "Meu notebook não conecta na VPN.");
+  assert.equal(conversationTitle("Oi"), "Oi");
+  assert.equal(conversationTitle("?"), "?");
+  const title = conversationTitle("word ".repeat(100));
+  assert.ok(Array.from(title).length <= 80);
+  assert.ok(title.endsWith("…"));
+  assert.equal(conversationTitle("🙂".repeat(100)), "🙂".repeat(79) + "…");
 });
