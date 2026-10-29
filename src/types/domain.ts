@@ -14,6 +14,31 @@ export type MessageProcessingState =
 export type ConversationContextPatch = {
   selectedTicketId?: string | null;
   pendingDraftId?: string | null;
+  flow?: ConversationFlow;
+};
+
+export type ConversationFlow = {
+  intent:
+    | "knowledge"
+    | "tickets"
+    | "status"
+    | "create"
+    | "update"
+    | "reopen"
+    | "handoff"
+    | "clarify"
+    | "out_of_scope";
+  stage:
+    | "collecting"
+    | "selecting"
+    | "knowledge"
+    | "awaiting_confirmation"
+    | "idle";
+  data?: Partial<import("./tickets").TicketData>;
+  environment?: string;
+  question?: string;
+  choices?: { label: string; message: string }[];
+  ticketIds?: string[];
 };
 
 export type SessionUser = {
@@ -42,6 +67,7 @@ export type Conversation = {
   initialMessageId?: string;
   selectedTicketId?: string | null;
   pendingDraftId?: string | null;
+  flow?: ConversationFlow;
 };
 
 export type Message = {
@@ -57,6 +83,7 @@ export type Message = {
   processingState?: MessageProcessingState;
   processingErrorCode?: string | null;
   decisionRefs?: string[];
+  ticket?: import("./tickets").TicketDTO;
 };
 
 export type ConversationDTO = Omit<Conversation, "createdAt" | "updatedAt"> & {

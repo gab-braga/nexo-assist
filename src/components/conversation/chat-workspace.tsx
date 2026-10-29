@@ -9,6 +9,8 @@ import { ConversationFilters } from "./conversation-filters";
 import { Button } from "@/components/ui/button";
 import { Status } from "@/components/status";
 import { messageProcessingFeedback } from "@/lib/message-processing";
+import { ConversationFlowPanel } from "./conversation-flow-panel";
+import { TicketCard } from "./ticket-card";
 import {
   useConversationWorkspace,
   type WorkspaceProps,
@@ -50,6 +52,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
     send,
     canReply,
     navigate,
+    reply,
   } = useConversationWorkspace(props);
   const visibleMessages = [
     ...(history?.items ?? []),
@@ -278,6 +281,9 @@ export function ChatWorkspace(props: WorkspaceProps) {
                         <p className="whitespace-pre-wrap wrap-break-word">
                           {message.text}
                         </p>
+                        {message.ticket && (
+                          <TicketCard ticket={message.ticket} />
+                        )}
                         <small className="text-[10px] text-muted-foreground">
                           {time(message.createdAt)}
                         </small>
@@ -289,6 +295,15 @@ export function ChatWorkspace(props: WorkspaceProps) {
                   <p className="text-sm text-muted-foreground">
                     Envie uma mensagem para começar.
                   </p>
+                )}
+                {!older && (
+                  <ConversationFlowPanel
+                    key={conversation._id}
+                    conversationId={conversation._id}
+                    initial={props.interaction}
+                    busy={pending}
+                    reply={reply}
+                  />
                 )}
               </>
             )}

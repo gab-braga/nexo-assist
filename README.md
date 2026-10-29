@@ -2,7 +2,7 @@
 
 O serviço de chamados da Fase 2 está documentado em [docs/fase-2-servico-de-chamados.md](docs/fase-2-servico-de-chamados.md), incluindo confirmação, regras de prazo, operações, seed e verificações.
 
-O núcleo de IA da Fase 3 usa Mastra e OpenAI no servidor, com streaming no chat existente. Consulte [configuração, ferramentas, limites, testes e pendências](docs/fase-3-agente-mastra.md). Defina `OPENAI_API_KEY` e, opcionalmente, `NEXO_AI_MODEL` no ambiente local. O fluxo visual completo de confirmação e a memória avançada permanecem para as próximas fases.
+O núcleo de IA da Fase 3 usa Mastra e OpenAI no servidor, com streaming no chat existente. Consulte [configuração, ferramentas e limites](docs/fase-3-agente-mastra.md). Defina `OPENAI_API_KEY` e, opcionalmente, `NEXO_AI_MODEL` no ambiente local. A [Fase 4](docs/fase-4-memoria-persistencia.md) mantém memória e histórico persistentes. A [Fase 5](docs/fase-5-fluxos-inteligentes.md) integra coleta, consulta/seleção, rascunho, confirmação explícita, atualização, reabertura e cancelamento ao chat.
 
 O chat inicia diretamente pelo campo de mensagem: Enter envia e Shift + Enter insere uma quebra de linha. A primeira mensagem válida cria conversa, mensagem e execução em uma única transação; o título é um resumo determinístico de até dez palavras/80 caracteres, sem chamada adicional ao modelo. Abrir a tela ou selecionar “Novo atendimento” não cria registros. Reenvios de resultado incerto preservam os mesmos UUIDs para recuperar o resultado sem duplicar a conversa ou processar a mensagem novamente.
 

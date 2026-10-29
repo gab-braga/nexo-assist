@@ -33,6 +33,18 @@ export async function confirmTicketChange(input: unknown) {
   return result(() => ticketService.confirmTicketChange(input));
 }
 
+export async function getConversationInteraction(input: unknown) {
+  return result(() => ticketService.getConversationInteraction(input));
+}
+
+export async function confirmConversationDraft(input: unknown) {
+  return result(() => ticketService.confirmConversationDraft(input));
+}
+
+export async function cancelConversationDraft(input: unknown) {
+  return result(() => ticketService.cancelConversationDraft(input));
+}
+
 export async function resolveTicket(input: unknown) {
   return result(() => ticketService.resolveTicket(input));
 }

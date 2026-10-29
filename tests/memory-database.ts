@@ -207,7 +207,7 @@ async function main() {
           toolCall("prepareTicketDraft", {
             change: {
               operation: "create",
-              data: { ...data, title: `Teclado ${user.uid}` },
+              data: { ...data, title: "Teclado com teclas travadas" },
             },
             rationale: "Dados suficientes para preparar rascunho.",
           }),

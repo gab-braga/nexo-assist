@@ -4,8 +4,25 @@ import { database } from "@/server/lib/mongodb";
 import { AppError } from "@/server/lib/errors";
 import { ticketBackend } from "@/server/lib/ticket-availability";
 import type { Ticket, TicketDraft, TicketEvent } from "@/types/tickets";
+import type { Conversation, Message } from "@/types/domain";
+import type { AgentRun } from "@/types/ai";
 
 export interface TicketTransaction {
+  getConversation(id: string): Promise<Conversation | null>;
+  getRun(id: string): Promise<AgentRun | null>;
+  saveConversation(conversation: Conversation, version: number): Promise<void>;
+  insertMessage(message: Message): Promise<void>;
+  insertConversationEvent(event: {
+    _id: string;
+    conversationId: string;
+    actorId: string;
+    operation: string;
+    createdAt: Date;
+    draftId?: string;
+    reason?: string;
+    summary?: string;
+    digest?: string;
+  }): Promise<void>;
   lockCustomer(customerId: string): Promise<void>;
   getTicket(id: string): Promise<Ticket | null>;
   getDraft(id: string): Promise<TicketDraft | null>;
@@ -53,6 +70,38 @@ const mongoTickets: TicketRepository = {
         const tickets = db.collection<Ticket>("tickets");
         const drafts = db.collection<TicketDraft>("ticket_drafts");
         const tx: TicketTransaction = {
+          getConversation: (id) =>
+            db
+              .collection<Conversation>("conversations")
+              .findOne({ _id: id }, { session }),
+          getRun: (id) =>
+            db
+              .collection<AgentRun>("agent_runs")
+              .findOne({ _id: id }, { session }),
+          async saveConversation(conversation, version) {
+            const saved = await db
+              .collection<Conversation>("conversations")
+              .replaceOne({ _id: conversation._id, version }, conversation, {
+                session,
+              });
+            if (saved.modifiedCount !== 1)
+              throw new AppError(
+                "CONFLICT",
+                "A conversa mudou. Atualize e tente novamente.",
+              );
+          },
+          async insertMessage(message) {
+            await db
+              .collection<Message>("messages")
+              .insertOne(message, { session });
+          },
+          async insertConversationEvent(event) {
+            await db
+              .collection<
+                Parameters<TicketTransaction["insertConversationEvent"]>[0]
+              >("conversation_events")
+              .insertOne(event, { session });
+          },
           async lockCustomer(customerId) {
             // All ticket mutations contend on the same owner's document, even for
             // different draft IDs. Prevents write skew between duplicate checks.

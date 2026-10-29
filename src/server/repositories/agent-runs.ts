@@ -52,38 +52,34 @@ async function interruptExpiredRun(
   session: ClientSession,
 ) {
   const now = new Date();
-  const updated = await db
-    .collection<AgentRun>("agent_runs")
-    .updateOne(
-      { _id: run._id, state: "running", expiresAt: { $lte: now } },
-      {
-        $set: {
-          state: "interrupted",
-          errorCode: "RUN_INTERRUPTED",
-          completedAt: now,
-        },
+  const updated = await db.collection<AgentRun>("agent_runs").updateOne(
+    { _id: run._id, state: "running", expiresAt: { $lte: now } },
+    {
+      $set: {
+        state: "interrupted",
+        errorCode: "RUN_INTERRUPTED",
+        completedAt: now,
       },
-      { session },
-    );
+    },
+    { session },
+  );
   if (updated.modifiedCount !== 1)
     throw new AppError("CONFLICT", "A execução mudou. Atualize a conversa.");
-  await db
-    .collection<Message>("messages")
-    .updateOne(
-      {
-        _id: run._id,
-        conversationId: run.conversationId,
-        authorId: run.customerId,
+  await db.collection<Message>("messages").updateOne(
+    {
+      _id: run._id,
+      conversationId: run.conversationId,
+      authorId: run.customerId,
+    },
+    {
+      $set: {
+        processingState: "interrupted",
+        processingErrorCode: "RUN_INTERRUPTED",
+        runId: run._id,
       },
-      {
-        $set: {
-          processingState: "interrupted",
-          processingErrorCode: "RUN_INTERRUPTED",
-          runId: run._id,
-        },
-      },
-      { session },
-    );
+    },
+    { session },
+  );
   if (conversation.aiActiveRunId === run._id) {
     const cleared = await db
       .collection<Conversation>("conversations")
@@ -221,6 +217,46 @@ const mongoAgentRuns: AgentRunRepository = {
           }
         }
         const now = new Date();
+        // Any new accepted turn fences the previous proposal before interpretation.
+        // Replays return above, so a retry never invalidates its own draft.
+        if (conversation.pendingDraftId) {
+          const invalidated = await db
+            .collection<TicketDraft>("ticket_drafts")
+            .updateOne(
+              {
+                _id: conversation.pendingDraftId,
+                customerId: user.uid,
+                conversationId: conversation._id,
+                appliedAt: null,
+                cancelledAt: null,
+              },
+              { $set: { cancelledAt: now } },
+              { session },
+            );
+          if (invalidated.modifiedCount)
+            await db
+              .collection<{
+                _id: string;
+                conversationId: string;
+                actorId: string;
+                operation: string;
+                draftId: string;
+                requestId: string;
+                createdAt: Date;
+              }>("conversation_events")
+              .insertOne(
+                {
+                  _id: randomUUID(),
+                  conversationId: conversation._id,
+                  actorId: user.uid,
+                  operation: "draft_invalidated",
+                  draftId: conversation.pendingDraftId,
+                  requestId: input.requestId,
+                  createdAt: now,
+                },
+                { session },
+              );
+        }
         const run: AgentRun = {
           _id: input.requestId,
           conversationId: input.conversationId,
@@ -319,12 +355,10 @@ const mongoAgentRuns: AgentRunRepository = {
           .limit(1)
           .next();
     const draft = conversation!.pendingDraftId
-      ? await db
-          .collection<TicketDraft>("ticket_drafts")
-          .findOne({
-            _id: conversation!.pendingDraftId,
-            customerId: run.customerId,
-          })
+      ? await db.collection<TicketDraft>("ticket_drafts").findOne({
+          _id: conversation!.pendingDraftId,
+          customerId: run.customerId,
+        })
       : null;
     const selectedId =
       conversation!.selectedTicketId ??
@@ -335,6 +369,7 @@ const mongoAgentRuns: AgentRunRepository = {
           .findOne({ _id: selectedId, customerId: run.customerId })
       : null;
     return {
+      flow: conversation!.flow,
       initialMessage,
       recentMessages,
       selectedTicket: ticket
@@ -352,9 +387,11 @@ const mongoAgentRuns: AgentRunRepository = {
             operation: draft.operation,
             state: draft.appliedAt
               ? "applied"
-              : draft.expiresAt <= new Date()
-                ? "expired"
-                : "pending",
+              : draft.cancelledAt
+                ? "cancelled"
+                : draft.expiresAt <= new Date()
+                  ? "expired"
+                  : "pending",
             data: draft.data,
           }
         : null,
@@ -374,6 +411,47 @@ const mongoAgentRuns: AgentRunRepository = {
         assertAgentConversation(conversation, run.customerId, run);
         if (run.expiresAt <= new Date())
           throw new AppError("TIMEOUT", "A execução expirou.");
+        for (const ticketId of patch.flow?.ticketIds ?? []) {
+          if (
+            !(await db
+              .collection<Ticket>("tickets")
+              .findOne(
+                { _id: ticketId, customerId: run.customerId },
+                { session },
+              ))
+          )
+            throw new AppError("NOT_FOUND", "Chamado não encontrado.");
+        }
+        if (patch.flow && conversation?.pendingDraftId) {
+          const draft = await db
+            .collection<TicketDraft>("ticket_drafts")
+            .findOne(
+              { _id: conversation.pendingDraftId, customerId: run.customerId },
+              { session },
+            );
+          if (
+            draft &&
+            !draft.appliedAt &&
+            !draft.cancelledAt &&
+            draft.expiresAt > new Date()
+          )
+            throw new AppError(
+              "INVALID_OPERATION",
+              "A proposta está aguardando revisão. Não substitua o estado depois de preparar o rascunho.",
+            );
+        }
+        if (
+          patch.flow &&
+          patch.flow.stage !== "idle" &&
+          conversation?.flow?.intent === patch.flow.intent
+        ) {
+          patch.flow = {
+            ...patch.flow,
+            environment:
+              patch.flow.environment ?? conversation.flow.environment,
+            data: { ...conversation.flow.data, ...patch.flow.data },
+          };
+        }
         if (
           patch.selectedTicketId &&
           !(await db

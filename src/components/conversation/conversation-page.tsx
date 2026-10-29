@@ -6,6 +6,7 @@ import {
 } from "@/server/services/conversations";
 import { result } from "@/server/lib/errors";
 import type { UserRole } from "@/types/domain";
+import { ticketService } from "@/server/services/tickets";
 
 export type ConversationSearch = Promise<
   Record<string, string | string[] | undefined>
@@ -46,7 +47,16 @@ export async function ConversationPage({ role, searchParams }: Props) {
       }),
       id ? getMessages({ conversationId: id, cursor: cursor(before) }) : null,
     ]);
-    return { list, conversation: history?.conversation ?? null, history };
+    const interaction =
+      role === "chat" && id && !before
+        ? await result(() => ticketService.getConversationInteraction(id))
+        : null;
+    return {
+      list,
+      conversation: history?.conversation ?? null,
+      history,
+      interaction: interaction?.ok ? interaction.data : null,
+    };
   });
 
   if (!data.ok)

@@ -2,7 +2,13 @@ import "server-only";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { runTool } from "../context";
-import { IntentSchema, rationaleSchema, ToolResultSchema } from "../schemas";
+import {
+  IntentSchema,
+  rationaleSchema,
+  ToolResultSchema,
+  ConversationFlowSchema,
+} from "../schemas";
+import { knowledgeGuidance } from "@/server/policies/knowledge-guidance";
 import {
   TicketDataSchema,
   PrepareTicketSchema,
@@ -25,6 +31,89 @@ export function createNexoTools(services: {
   knowledge: typeof listKnowledgeArticles;
 }) {
   return {
+    cancelPendingOperation: createTool({
+      id: "cancelPendingOperation",
+      description:
+        "Cancela a proposta pendente desta conversa quando o funcionário desistir ou mudar de intenção. Nunca desfaz uma operação já aplicada.",
+      inputSchema: z.object({ rationale: rationaleSchema }).strict(),
+      outputSchema: ToolResultSchema,
+      execute: async (input, context) =>
+        runTool(
+          context?.requestContext?.get("nexo"),
+          "cancelPendingOperation",
+          "clarify",
+          input.rationale,
+          {},
+          async (scope) => {
+            const result = await services.tickets.cancelPendingOperation(
+              scope.conversationId,
+              scope.runId,
+            );
+            await scope.rememberContext({
+              pendingDraftId: null,
+              flow: { intent: "clarify", stage: "idle" },
+            });
+            return result;
+          },
+        ),
+    }),
+    getTicketHistory: createTool({
+      id: "getTicketHistory",
+      description:
+        "Consulta atualizações reais de um chamado próprio já selecionado. Não invente a última atualização.",
+      inputSchema: z
+        .object({ ticketId: IdSchema, rationale: rationaleSchema })
+        .strict(),
+      outputSchema: ToolResultSchema,
+      execute: async (input, context) =>
+        runTool(
+          context?.requestContext?.get("nexo"),
+          "getTicketHistory",
+          "status",
+          input.rationale,
+          { ticketId: input.ticketId },
+          async () =>
+            (await services.tickets.getTicketHistory(input.ticketId))
+              .slice(-10)
+              .map((event) => ({
+                operation: event.operation,
+                at: event.createdAt,
+                title: event.after.title,
+                status: event.after.status,
+              })),
+        ),
+    }),
+    updateConversationFlow: createTool({
+      id: "updateConversationFlow",
+      description:
+        "Persiste intenção, dados parciais já informados, ambiente, pergunta e até quatro opções rápidas. Use antes de pedir dados ou mudar de intenção; não confirma operações nem modifica segurança.",
+      inputSchema: z
+        .object({ state: ConversationFlowSchema, rationale: rationaleSchema })
+        .strict(),
+      outputSchema: ToolResultSchema,
+      execute: async (input, context) =>
+        runTool(
+          context?.requestContext?.get("nexo"),
+          "updateConversationFlow",
+          input.state.intent,
+          input.rationale,
+          {
+            stage: input.state.stage,
+            source: "model_inference",
+            ...(input.state.data?.type ? { type: input.state.data.type } : {}),
+            ...(input.state.data?.category
+              ? { category: input.state.data.category }
+              : {}),
+          },
+          async (scope) => {
+            await scope.rememberContext({
+              flow: input.state,
+              ...(input.state.stage === "idle" ? { pendingDraftId: null } : {}),
+            });
+            return { saved: true };
+          },
+        ),
+    }),
     recordDecision: createTool({
       id: "recordDecision",
       description:
@@ -50,6 +139,7 @@ export function createNexoTools(services: {
       inputSchema: z
         .object({
           search: z.string().trim().min(2).max(160),
+          environment: z.string().trim().max(120).optional(),
           rationale: rationaleSchema,
         })
         .strict(),
@@ -64,11 +154,7 @@ export function createNexoTools(services: {
           async () =>
             (await services.knowledge({ search: input.search }))
               .slice(0, 6)
-              .map((article) => ({
-                ...article,
-                content: article.content.slice(0, 2000),
-                truncated: article.content.length > 2000,
-              })),
+              .map((article) => knowledgeGuidance(article, input.environment)),
         ),
     }),
     listUserTickets: createTool({
@@ -86,11 +172,20 @@ export function createNexoTools(services: {
           "tickets",
           input.rationale,
           { overdue: input.query.overdue, status: input.query.status ?? "all" },
-          async () => {
+          async (scope) => {
             const page = await services.tickets.listMyTickets({
               ...input.query,
               limit: Math.min(input.query.limit, 5),
             });
+            if (page.items.length > 1)
+              await scope.rememberContext({
+                flow: {
+                  intent: "tickets",
+                  stage: "selecting",
+                  ticketIds: page.items.map((ticket) => ticket._id),
+                  question: "Qual chamado você deseja consultar?",
+                },
+              });
             return { ...page, items: page.items.map(ticketSummary) };
           },
         ),
@@ -112,7 +207,10 @@ export function createNexoTools(services: {
           { ticketId: input.ticketId },
           async (scope) => {
             const ticket = await services.tickets.getTicket(input.ticketId);
-            await scope.rememberContext({ selectedTicketId: ticket._id });
+            await scope.rememberContext({
+              selectedTicketId: ticket._id,
+              flow: { intent: "status", stage: "idle" },
+            });
             return ticket;
           },
         ),
@@ -134,7 +232,10 @@ export function createNexoTools(services: {
           { ticketId: input.ticketId },
           async (scope) => {
             const ticket = await services.tickets.getTicket(input.ticketId);
-            await scope.rememberContext({ selectedTicketId: ticket._id });
+            await scope.rememberContext({
+              selectedTicketId: ticket._id,
+              flow: { intent: "status", stage: "idle" },
+            });
             return {
               _id: ticket._id,
               number: ticket.number,
@@ -142,6 +243,12 @@ export function createNexoTools(services: {
               priority: ticket.priority,
               nextResponseDueAt: ticket.nextResponseDueAt,
               overdue: ticket.overdue,
+              handoffReason:
+                ticket.priority === "critical"
+                  ? "critical"
+                  : ticket.overdue
+                    ? "overdue"
+                    : null,
             };
           },
         ),
@@ -161,10 +268,20 @@ export function createNexoTools(services: {
           "create",
           input.rationale,
           { category: input.data.category, type: input.data.type },
-          async () => {
+          async (scope) => {
             const candidates = await services.tickets.findPossibleDuplicates(
               input.data,
             );
+            if (candidates.length)
+              await scope.rememberContext({
+                flow: {
+                  intent: "create",
+                  stage: "selecting",
+                  ticketIds: candidates.slice(0, 5).map((ticket) => ticket._id),
+                  question:
+                    "Já existe um chamado semelhante. Qual deles corresponde ao problema?",
+                },
+              });
             return {
               items: candidates.slice(0, 10).map(ticketSummary),
               truncated: candidates.length > 10,
@@ -215,6 +332,7 @@ export function createNexoTools(services: {
             // The confirmation capability MUST NOT enter model context or audit logs.
             const prepared = await services.tickets.prepareTicketChange(
               input.change,
+              { conversationId: scope.conversationId, runId: scope.runId },
             );
             const { token: _token, digest: _digest, ...draft } = prepared;
             void _token;
@@ -225,7 +343,7 @@ export function createNexoTools(services: {
                 ? { selectedTicketId: draft.ticketId }
                 : {}),
             });
-            scope.draftSummary = `Rascunho preparado (${draft.operation}):\n${draft.data.title}\n${draft.data.description}\nTipo: ${draft.data.type} · Categoria: ${draft.data.category} · Prioridade: ${draft.priority}\nImpacto: ${draft.data.impact} · Urgência: ${draft.data.urgency}\nFuncionário afetado: ${draft.affectedEmployee.name}\nNenhum chamado foi criado ou alterado. A operação aguarda confirmação explícita no fluxo autorizado, cuja integração visual será disponibilizada na próxima fase.`;
+            scope.draftSummary = `Rascunho preparado (${draft.operation}):\n${draft.data.title}\n${draft.data.description}\nTipo: ${draft.data.type} · Categoria: ${draft.data.category} · Prioridade: ${draft.priority}\nPrazo de resposta: ${draft.sla}\nFuncionário afetado: ${draft.affectedEmployee.name}\nNenhum chamado foi criado ou alterado. Revise o rascunho e use Confirmar operação para executar. Para corrigir, descreva a alteração; para desistir, use Cancelar.`;
             return { ...draft, confirmationRequired: true, executed: false };
           },
         ),

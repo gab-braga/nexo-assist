@@ -54,6 +54,11 @@ export type TicketDraft = {
   expiresAt: Date;
   appliedAt: Date | null;
   result: Ticket | null;
+  cancelledAt?: Date | null;
+  conversationId?: string;
+  controlVersion?: number;
+  sourceRunId?: string;
+  confirmationMessageId?: string;
 };
 
 export type TicketEvent = {
@@ -91,4 +96,24 @@ export type TicketDTO = Omit<
   nextResponseDueAt: string;
   resolvedAt: string | null;
   overdue: boolean;
+};
+
+export type TicketDraftView = {
+  draftId: string;
+  digest: string;
+  operation: TicketOperation;
+  data: TicketData;
+  priority: TicketPriority;
+  affectedEmployee: string;
+  reason: string | null;
+  expiresAt: string;
+  state: "pending" | "expired" | "cancelled" | "applied";
+};
+
+export type ConversationInteraction = {
+  canConfirm: boolean;
+  flow: import("./domain").ConversationFlow | null;
+  draft: TicketDraftView | null;
+  tickets: TicketDTO[];
+  selectedTicket: TicketDTO | null;
 };

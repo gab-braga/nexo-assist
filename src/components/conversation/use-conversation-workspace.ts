@@ -27,6 +27,7 @@ import type {
 } from "@/server/services/conversations";
 
 export type WorkspaceProps = {
+  interaction?: import("@/types/tickets").ConversationInteraction | null;
   user: SessionUser;
   list: Awaited<ReturnType<typeof listConversations>>;
   conversation: ConversationDTO | null;
@@ -313,5 +314,10 @@ export function useConversationWorkspace({
     canReply,
     newConversation,
     navigate: router.push,
+    reply: (message: string) => {
+      if (sending.current || pending) return;
+      messageForm.setValue("text", message);
+      void messageForm.handleSubmit(submitMessage)();
+    },
   };
 }

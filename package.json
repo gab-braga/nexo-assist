@@ -14,6 +14,8 @@
     "auth:role": "node scripts/set-role.mjs",
     "test:backend": "node --conditions=react-server --import tsx --test tests/backend.test.ts tests/tickets.test.ts",
     "test:agent": "node --conditions=react-server --import tsx --test tests/agent.test.ts tests/memory.test.ts",
+    "test:flows": "node --conditions=react-server --import tsx --test tests/flows.test.ts",
+    "test:flows:database": "node --conditions=react-server --import tsx tests/flows-database.ts",
     "test:memory:database": "node --conditions=react-server --import tsx tests/memory-database.ts",
     "test:agent:database": "node --conditions=react-server --import tsx tests/agent-database.ts",
     "test:agent:live": "node --conditions=react-server --import tsx tests/agent-live.ts",

@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Conversation, Message } from "../src/types/domain";
 import type { AgentRun } from "../src/types/ai";
 import type { AgentTurnInput } from "../src/server/ai/schemas";
+import type { Ticket, TicketData, TicketDraft } from "../src/types/tickets";
 loadEnvConfig(process.cwd());
 
 async function main() {
@@ -18,8 +19,12 @@ async function main() {
   const { createNexoAgent } =
     await import("../src/server/ai/agents/nexo-agent");
   const { createNexoTools } = await import("../src/server/ai/tools");
-  const { ticketService } = await import("../src/server/services/tickets");
-  const { scriptedModel, textParts } = await import("./helpers/scripted-model");
+  const { createTicketService } =
+    await import("../src/server/services/tickets");
+  const { ticketRepository } =
+    await import("../src/server/repositories/tickets");
+  const { scriptedModel, textParts, toolCall } =
+    await import("./helpers/scripted-model");
   const { conversationTitle } = await import("../src/lib/conversation-title");
   const { Mastra } = await import("@mastra/core/mastra");
   const db = await database();
@@ -33,11 +38,30 @@ async function main() {
     role: "chat" as const,
   };
   let accountCreated = false;
-  let mode: "normal" | "creation-failure" | "lose-response" | "model-failure" =
-    "normal";
+  let mode:
+    | "normal"
+    | "creation-failure"
+    | "lose-response"
+    | "model-failure"
+    | "collect"
+    | "draft" = "normal";
   let modelCalls = 0;
   const requests: AgentTurnInput[] = [];
   const conversationIds = new Set<string>();
+  const ticketService = createTicketService({
+    repository: ticketRepository,
+    authenticate: async () => user,
+    available: () => {},
+    now: () => new Date(),
+  });
+  let proposedData: TicketData = {
+    title: "Notebook sem energia",
+    description: "Notebook não liga e estou sem alternativa para trabalhar.",
+    type: "INC",
+    category: "Hardware",
+    impact: "person",
+    urgency: "blocked",
+  };
   const tools = createNexoTools({
     tickets: ticketService,
     knowledge: async () => [],
@@ -59,7 +83,48 @@ async function main() {
                   },
                 ],
               ]
-            : [textParts(`Resposta ${modelCalls} em streaming.`)],
+            : mode === "collect"
+              ? [
+                  [
+                    toolCall("updateConversationFlow", {
+                      state: {
+                        intent: "create",
+                        stage: "collecting",
+                        data: {
+                          title: proposedData.title,
+                          type: proposedData.type,
+                          category: proposedData.category,
+                          impact: "person",
+                        },
+                        question: "Consegue trabalhar em outro equipamento?",
+                        choices: [
+                          {
+                            label: "Sem alternativa",
+                            message: "Não tenho alternativa para trabalhar.",
+                          },
+                          {
+                            label: "Tenho alternativa",
+                            message: "Consigo trabalhar com outro equipamento.",
+                          },
+                        ],
+                      },
+                      rationale: "Coletar urgência antes de propor prioridade.",
+                    }),
+                  ],
+                  textParts("Consegue trabalhar em outro equipamento?"),
+                ]
+              : mode === "draft"
+                ? [
+                    [
+                      toolCall("prepareTicketDraft", {
+                        change: { operation: "create", data: proposedData },
+                        rationale:
+                          "Dados completos para revisão do funcionário.",
+                      }),
+                    ],
+                    textParts("Revise a proposta."),
+                  ]
+                : [textParts(`Resposta ${modelCalls} em streaming.`)],
         ),
         tools,
       );
@@ -363,15 +428,119 @@ async function main() {
     await newConversation.click();
     await expect(composer).toHaveValue("");
     assert.equal(await count(), 4);
+    mode = "collect";
+    await composer.fill("Meu notebook não liga. Afeta apenas a mim.");
+    await send.click();
+    await expect(
+      page.getByRole("button", { name: "Sem alternativa", exact: true }),
+    ).toBeEnabled({ timeout: 20000 });
+    mode = "draft";
+    await page
+      .getByRole("button", { name: "Sem alternativa", exact: true })
+      .click();
+    const draftCard = page.locator('[data-visual="draft-card"]');
+    const confirm = page.getByRole("button", {
+      name: "Confirmar operação",
+      exact: true,
+    });
+    await expect(confirm).toBeEnabled({ timeout: 20000 });
+    await expect(draftCard).toContainText("Prioridade: Alta");
+    await expect(draftCard).toContainText("4 horas úteis");
+    assert.equal(
+      await db
+        .collection<Ticket>("tickets")
+        .countDocuments({ customerId: uid }),
+      0,
+    );
+    await page.reload();
+    await expect(confirm).toBeEnabled();
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      );
+    }
+    await confirm.evaluate((element: HTMLButtonElement) => {
+      element.click();
+      element.click();
+    });
+    await expect(draftCard).toHaveCount(0, { timeout: 20000 });
+    await expect(page.getByText(/Abertura confirmada:/)).toHaveCount(1, {
+      timeout: 20000,
+    });
+    const savedTickets = await db
+      .collection<Ticket>("tickets")
+      .find({ customerId: uid })
+      .toArray();
+    assert.equal(savedTickets.length, 1);
+    assert.equal(
+      await db
+        .collection<Message>("messages")
+        .countDocuments({ "ticket._id": savedTickets[0]._id }),
+      1,
+    );
+    const callsAfterConfirmation = modelCalls;
+    await page.reload();
+    await expect(page.getByText(/Abertura confirmada:/)).toHaveCount(1);
+    assert.equal(modelCalls, callsAfterConfirmation);
+
+    await newConversation.click();
+    await expect(composer).toHaveValue("");
+    proposedData = {
+      title: "Solicitação de monitores externos",
+      description: "Preciso de monitor externo para meu trabalho diário.",
+      type: "REQ",
+      category: "Hardware",
+      impact: "person",
+      urgency: "normal",
+    };
+    await composer.fill("Preciso de um monitor sem urgência.");
+    await send.click();
+    await expect(confirm).toBeEnabled({ timeout: 20000 });
+    const cancelledId = requests.at(-1)!.conversationId;
+    await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await expect(draftCard).toHaveCount(0, { timeout: 20000 });
+    assert.equal(
+      (
+        await db
+          .collection<Conversation>("conversations")
+          .findOne({ _id: cancelledId })
+      )?.pendingDraftId,
+      null,
+    );
+    assert.equal(
+      await db
+        .collection<Ticket>("tickets")
+        .countDocuments({ customerId: uid }),
+      1,
+    );
+    await page.reload();
+    await expect(draftCard).toHaveCount(0);
     assert.deepEqual(errors, []);
     console.log(
-      "Chat UI passed: centered multiline composer on desktop/mobile, atomic first send, automatic title, single invocation, reload, continuation, new chat without empty records, creation failure, post-commit network replay and provider failure without lost text.",
+      "Chat UI passed: first-send/reload/failure regressions, persistent quick choices, responsive draft, server-confirmed operation, double-click protection, persisted receipt, reload without model invocation and cancellation.",
     );
   } catch (error) {
     if (diagnostic) console.error("Chat test diagnostic:", await diagnostic());
     throw error;
   } finally {
     await browser.close();
+    const tickets = await db
+      .collection<Ticket>("tickets")
+      .find({ customerId: uid })
+      .toArray();
+    await db
+      .collection("ticket_events")
+      .deleteMany({ ticketId: { $in: tickets.map((ticket) => ticket._id) } });
+    await db.collection<Ticket>("tickets").deleteMany({ customerId: uid });
+    await db
+      .collection<TicketDraft>("ticket_drafts")
+      .deleteMany({ customerId: uid });
+    await db
+      .collection<{ _id: string }>("ticket_customer_locks")
+      .deleteOne({ _id: uid });
     const ids = [...conversationIds];
     await db.collection<AgentRun>("agent_runs").deleteMany({ customerId: uid });
     await db

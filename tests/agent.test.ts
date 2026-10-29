@@ -91,6 +91,38 @@ function fixture() {
     },
   );
   const requestContext = new RequestContext();
+  repository.conversations.set(conversationId, {
+    _id: conversationId,
+    customerId: user.uid,
+    customerName: user.name,
+    subject: "Teste",
+    status: "waiting",
+    agentId: null,
+    agentName: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    version: 0,
+    aiEnabled: true,
+    aiActiveRunId: scope.runId,
+  });
+  repository.runs.set(scope.runId, {
+    _id: scope.runId,
+    conversationId,
+    customerId: user.uid,
+    controlVersion: 0,
+    state: "running",
+    expiresAt: new Date("2099-01-01"),
+    createdAt: new Date(),
+    completedAt: null,
+    inputHash: "test",
+    response: null,
+    responseId: crypto.randomUUID(),
+    errorCode: null,
+    model: "test",
+    promptVersion: "test",
+    audit: [],
+    usage: null,
+  });
   requestContext.set("nexo", scope);
   return {
     tools,

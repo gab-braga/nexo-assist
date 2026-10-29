@@ -47,6 +47,7 @@ export type AgentRun = {
 };
 
 export type AgentMemorySnapshot = {
+  flow?: import("./domain").ConversationFlow;
   initialMessage: Message | null;
   recentMessages: Message[];
   selectedTicket: {
@@ -59,7 +60,7 @@ export type AgentMemorySnapshot = {
     draftId: string;
     ticketId: string;
     operation: "create" | "update" | "reopen" | "handoff";
-    state: "pending" | "expired" | "applied";
+    state: "pending" | "expired" | "applied" | "cancelled";
     data: TicketData;
   } | null;
 };

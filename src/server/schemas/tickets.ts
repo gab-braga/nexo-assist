@@ -61,6 +61,14 @@ export const ConfirmTicketSchema = z
   })
   .strict();
 
+export const ConversationDraftSchema = z
+  .object({
+    conversationId: IdSchema,
+    draftId: IdSchema,
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+
 export const TicketListSchema = z
   .object({
     status: z.enum(["open", "waiting_human", "resolved"]).optional(),
