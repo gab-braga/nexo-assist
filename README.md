@@ -95,3 +95,11 @@ npm run test:integration
 `test:ui` verifica rotas anônimas, cookie forjado, ausência de credenciais preenchidas, recuperação e layout do login. `test:integration` exige Authentication ativo e acesso administrativo: cria contas temporárias e testa login, isolamento entre clientes, acesso cruzado entre roles, mensagens persistidas, observação por outro atendente, encerramento, claims alteradas e logout. Remove contas e dados ao terminar. Use `TEST_BASE_URL` para outro endereço local.
 
 A verificação completa de autenticação depende da ativação externa de Authentication. O lint apresenta dois avisos preexistentes nos scripts históricos de `artifacts/`.
+
+## Restauração visual
+
+Os componentes de apresentação foram recuperados do commit `74ee161` e adaptados aos atendimentos persistidos. A autenticação, os guards e a camada de dados permanecem separados da interface.
+
+Após gerar o build, execute `node tests/visual-restoration.mjs` para comparar login, perfil, chat e console do atendente em 390, 768 e 1440 px. O teste renderiza as versões do Git e as versões restauradas em um ambiente isolado com dados de apresentação, sem criar rotas de acesso alternativo à aplicação. As capturas e medidas ficam em `artifacts/visual-restoration/`. A largura móvel do console segue as capturas históricas, corrigindo o conflito entre as classes de grade legadas no Tailwind atual.
+
+Nesta restauração, também passaram os testes completos com Firebase e Firestore reais, incluindo login, claims, isolamento entre clientes, mensagens, atribuição, encerramento e logout. Contas e registros temporários são removidos ao final.

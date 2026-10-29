@@ -79,7 +79,7 @@ export function Shell({ children, user }: Props) {
           <form action={logout}>
             <button
               type="submit"
-              className="mt-3 flex cursor-pointer items-center gap-2 text-sm"
+              className="mt-3 flex cursor-pointer items-center gap-2.75 text-[13px] text-[#344156] focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3"
             >
               <LogOut size={16} />
               Sair

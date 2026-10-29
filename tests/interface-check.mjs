@@ -18,6 +18,8 @@ async function newPage() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   contexts.push(context);
   const page = await context.newPage();
+  page.setDefaultNavigationTimeout(30000);
+  page.setDefaultTimeout(15000);
   page.on("pageerror", error => errors.push(error.message));
   return page;
 }
@@ -101,9 +103,9 @@ try {
       await agentPage.setViewportSize({ width, height: 900 });
       assert.ok(await agentPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Agent overflow at ${width}`);
     }
-    agentPage.once("dialog", dialog => dialog.accept());
     await agentPage.getByRole("button", { name: "Encerrar atendimento", exact: true }).click();
-    await agentPage.getByText("Este atendimento foi encerrado. O histórico foi preservado.").waitFor();
+    await agentPage.getByRole("dialog").getByRole("button", { name: "Encerrar atendimento", exact: true }).click();
+    await agentPage.getByText("Atendimento encerrado", { exact: true }).first().waitFor();
     const denied = await newPage();
     await denied.goto(baseURL);
     await denied.locator("#email").fill(unassigned.email);
@@ -122,6 +124,10 @@ try {
 } catch (error) {
   // Firebase Admin errors can contain request headers and generated passwords.
   console.error("Interface checks failed:", error.code || error.name);
+  console.error("Operation:", error.message?.split("\n")[0]);
+  for (const context of contexts) for (const page of context.pages()) {
+    console.error("Page:", page.url(), "Feedback:", await page.locator('[role="alert"], [role="status"]').allTextContents());
+  }
   process.exitCode = 1;
 } finally {
   for (const context of contexts) await context.close();
