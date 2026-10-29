@@ -6,10 +6,12 @@ import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import { ChevronRight, LogOut, MessageSquare, UserRound } from "lucide-react";
 import { Avatar } from "./avatar";
-import { user } from "@/data/data";
+import type { SessionUser } from "@/types/domain";
+import { logout } from "@/server/actions/auth";
 
 type Props = {
   children: React.ReactNode;
+  user: SessionUser;
 };
 
 const links = [
@@ -17,7 +19,7 @@ const links = [
   { label: "Meu Perfil", icon: <UserRound />, to: "/profile" },
 ];
 
-export function Shell({ children }: Props) {
+export function Shell({ children, user }: Props) {
   const pathname = usePathname();
   const active = links.find((link) => link.to === pathname);
 
@@ -60,7 +62,13 @@ export function Shell({ children }: Props) {
             data-visual="user-info"
             className="flex items-center gap-2.5 *:data-[slot=avatar]:size-8.5 *:data-[slot=avatar]:text-[12px] *:data-[slot=avatar]:bg-secondary [&_strong]:block [&_strong]:text-[13px] [&_strong]:font-medium [&_small]:block [&_small]:text-2.75 max-[800.001px]:[&_small]:text-[9px] max-[540.001px]:[&>div]:hidden"
           >
-            <Avatar />
+            <Avatar
+              initials={user.name
+                .split(" ")
+                .map((part) => part[0])
+                .slice(0, 2)
+                .join("")}
+            />
             <div>
               <strong>{user.name}</strong>
               <small className="text-[12px] text-muted-foreground">
@@ -68,13 +76,15 @@ export function Shell({ children }: Props) {
               </small>
             </div>
           </div>
-          <Link
-            className="cursor-pointer [-webkit-tap-highlight-color:transparent] focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3 text-inherit no-underline"
-            href="/"
-          >
-            <LogOut size={16} />
-            Sair
-          </Link>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="mt-3 flex cursor-pointer items-center gap-2 text-sm"
+            >
+              <LogOut size={16} />
+              Sair
+            </button>
+          </form>
         </div>
       </aside>
       <div

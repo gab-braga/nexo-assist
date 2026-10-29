@@ -1,6 +1,6 @@
 ﻿import type { Metadata } from "next";
 import { sans, serif } from "@/lib/font";
-import "@/style/globals.css";
+import "@/styles/globals.css";
 
 export const metadata: Metadata = {
   title: "Nexo Assist | Service desk de TI",
@@ -17,7 +17,9 @@ export default function RootLayout({ children }: Props) {
       lang="pt-BR"
       className={`${sans.variable} ${serif.variable} h-full antialiased`}
     >
-      <body className="m-0 bg-background font-sans text-[14px] text-foreground">{children}</body>
+      <body className="m-0 bg-background font-sans text-[14px] text-foreground">
+        {children}
+      </body>
     </html>
   );
 }

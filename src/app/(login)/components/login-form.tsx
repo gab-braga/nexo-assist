@@ -4,23 +4,87 @@ import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { user } from "@/data/data";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+} from "firebase/auth";
+import { getClientAuth } from "@/server/lib/firebase/firebase-client";
+import { login } from "@/server/actions/auth";
 
 export function LoginForm() {
   const router = useRouter();
   const [show, setShow] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    setMessage("");
+    try {
+      const auth = await getClientAuth();
+      try {
+        const credential = await signInWithEmailAndPassword(
+          auth,
+          email,
+          password,
+        );
+        const response = await login({
+          idToken: await credential.user.getIdToken(true),
+          remember,
+        });
+        if (!response.ok) {
+          setMessage(response.error);
+          return;
+        }
+        router.replace(response.data.destination);
+        router.refresh();
+      } finally {
+        await signOut(auth);
+      }
+    } catch {
+      setMessage(
+        "Não foi possível entrar. Verifique seus dados ou entre em contato com a TI.",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+  async function reset() {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setMessage("Informe seu e-mail para redefinir a senha.");
+      return;
+    }
+    setPending(true);
+    try {
+      await sendPasswordResetEmail(await getClientAuth(), email);
+      setMessage(
+        "Se houver uma conta com esse e-mail, você receberá as instruções de redefinição.",
+      );
+    } catch {
+      setMessage("Não foi possível solicitar a redefinição. Tente novamente.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <form
       data-visual="login-form"
       className="w-95 -mt-8.75 [&>h2]:font-serif [&>h2]:text-[36px] [&>h2]:leading-[1.2] [&>h2]:mb-3.2 [&>h2]:font-normal [&>p]:text-muted-foreground [&>p]:text-[15px] [&>p]:mb-6.5 [&>p]:whitespace-nowrap [&_label]:text-[13px] [&_label]:block [&_label]:mb-1.5 max-[1250.001px]:w-full max-[1250.001px]:[&>p]:whitespace-normal max-[800.001px]:max-w-105 max-[800.001px]:mt-0"
-      onSubmit={(e) => {
-        e.preventDefault();
-        router.push("/chat");
-      }}
+      onSubmit={submit}
     >
       <h2>Entrar</h2>
-      <p>Use seu e-mail corporativo e a senha da rede Nexo.</p>
+      <p>Use a conta fornecida pela TI.</p>
+      {message && (
+        <div role="status" className="mb-4 text-sm">
+          {message}
+        </div>
+      )}
       <label htmlFor="email">E-mail corporativo</label>
       <div
         data-visual="input-icon"
@@ -32,7 +96,10 @@ export function LoginForm() {
           id="email"
           type="email"
           required
-          defaultValue={user.email}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          autoComplete="username"
+          maxLength={254}
         />
       </div>
       <div
@@ -43,6 +110,8 @@ export function LoginForm() {
         <button
           className="cursor-pointer [-webkit-tap-highlight-color:transparent] focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3 disabled:cursor-default"
           type="button"
+          disabled={pending}
+          onClick={reset}
         >
           Esqueci minha senha
         </button>
@@ -56,9 +125,10 @@ export function LoginForm() {
           className="[-webkit-tap-highlight-color:transparent] outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
           id="password"
           type={show ? "text" : "password"}
-          minLength={4}
           required
-          defaultValue="nexoassist1"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          autoComplete="current-password"
         />
         <button
           className="cursor-pointer [-webkit-tap-highlight-color:transparent] focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3 disabled:cursor-default"
@@ -76,7 +146,8 @@ export function LoginForm() {
         <input
           className="[-webkit-tap-highlight-color:transparent] outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
           type="checkbox"
-          defaultChecked
+          checked={remember}
+          onChange={(event) => setRemember(event.target.checked)}
         />
         Manter conectado neste computador
       </label>
@@ -85,6 +156,7 @@ export function LoginForm() {
         size="lg"
         className="w-full shadow-[0_7px_14px_#0063c920] text-[15px]"
         type="submit"
+        disabled={pending}
       >
         Entrar <ArrowRight />
       </Button>

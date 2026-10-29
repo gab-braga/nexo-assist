@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Administrative credentials
+/service-account.json
+/.npm-cache/
+!/.env.example

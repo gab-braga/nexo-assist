@@ -1,9 +1,12 @@
 ﻿import Image from "next/image";
 import { LoginForm } from "./components/login-form";
-import { Status } from "@/components/status";
-import { loginDemo } from "@/data/data";
+import { getSession } from "@/auth/session";
+import { redirect } from "next/navigation";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const user = await getSession();
+  if (user) redirect(user.role === "agent" ? "/agent" : "/chat");
+
   return (
     <main
       data-visual="login-page"
@@ -34,56 +37,11 @@ export default function LoginPage() {
             data-visual="story-description"
             className="text-[16px] leading-6.25 text-[#b5b9bf] max-w-127 mt-6.25 max-[800.001px]:text-[14px] max-[800.001px]:leading-5.75 max-[540.001px]:mt-5"
           >
-            Descreva o que está acontecendo. O assistente consulta seus
-            chamados, busca na central de ajuda e chama um analista quando
-            precisa.
+            Descreva o que está acontecendo, converse com a equipe de TI e
+            acompanhe o histórico dos seus atendimentos.
           </p>
-          <div
-            data-visual="story-demo"
-            className="max-w-125.5 mt-9 ml-auto mr-18.75 border border-[#ffffff12] rounded-[17px] bg-[#ffffff03] p-4.25 text-[13px] [&>p]:text-[12px] [&>p]:mt-2.25 [&>p]:mb-1.25 [&>p]:text-[#ddd] [&>p>span]:text-[#9299a3] [&>p>span]:ml-1 max-[1250.001px]:mr-0 max-[800.001px]:hidden"
-          >
-            <div
-              data-visual="demo-user"
-              className="bg-card text-[#1c2633] rounded-[12px_12px_3px_12px] py-2 px-3.25 w-fit ml-auto"
-            >
-              {loginDemo.question}
-            </div>
-            <p>
-              Nexo Assist{" "}
-              <span>consultou seus chamados · criou um chamado</span>
-            </p>
-            <div
-              data-visual="demo-answer"
-              className="py-2.5 px-3.5 bg-[#ffffff16] rounded-[0_13px_13px_13px] max-w-95 leading-5.25"
-            >
-              {loginDemo.answer}
-            </div>
-            <div
-              data-visual="demo-ticket"
-              className="flex gap-2 items-center bg-card text-muted-foreground rounded-xl py-1.5 px-3 mt-1.5 w-fit text-[12px] *:data-[slot=status]:text-[#1c2633] *:data-[slot=status]:font-semibold"
-            >
-              <Status color="amber">{loginDemo.ticket}</Status>
-              <span>Rede e VPN · Alta · em até 4 h</span>
-            </div>
-          </div>
-        </div>
-        <div
-          data-visual="story-stats"
-          className="grid grid-cols-[1fr_1fr_1fr] mt-auto pt-5.75 border-t border-[#ffffff16] gap-6 [&>div+div]:border-l [&>div+div]:border-[#ffffff16] [&>div+div]:pl-6 [&_strong]:font-serif [&_strong]:text-[30px] [&_strong]:font-normal [&_strong]:flex [&_strong]:items-center [&_strong]:gap-2.25 [&_strong]:mb-1.25 [&_i]:inline-block [&_i]:size-2 [&_i]:shrink-0 [&_i]:rounded-full [&_i]:bg-[#00bd7d] [&_span]:text-[13px] [&_span]:text-[#a6aab2] [&_span]:whitespace-nowrap max-[1250.001px]:grid-cols-3 max-[1250.001px]:gap-3 max-[1250.001px]:[&>div+div]:pl-3 max-[1250.001px]:[&_span]:text-[10px] max-[800.001px]:mt-7.5 max-[800.001px]:[&_strong]:text-[24px] max-[540.001px]:[&_span]:whitespace-normal"
-        >
-          <div>
-            <strong>8 s</strong>
-            <span>primeira resposta, em média</span>
-          </div>
-          <div>
-            <strong>72%</strong>
-            <span>resolvidos sem fila</span>
-          </div>
-          <div>
-            <strong>
-              6 <i />
-            </strong>
-            <span>analistas online agora</span>
+          <div className="mt-9 rounded-2xl border border-white/10 bg-white/5 p-6 text-[#b5b9bf]">
+            Seus atendimentos e mensagens em um só lugar.
           </div>
         </div>
       </section>

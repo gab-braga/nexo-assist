@@ -1,4 +1,3 @@
-import { user } from "@/data/data";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -8,7 +7,7 @@ type Props = {
 };
 
 export function Avatar({
-  initials = user.initials,
+  initials = "?",
   tone = "blue",
   online = false,
 }: Props) {
