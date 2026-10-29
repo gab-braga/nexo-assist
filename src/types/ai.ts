@@ -47,6 +47,7 @@ export type AgentRun = {
 };
 
 export type AgentMemorySnapshot = {
+  analystSummary?: string;
   flow?: import("./domain").ConversationFlow;
   initialMessage: Message | null;
   recentMessages: Message[];

@@ -5,6 +5,7 @@ import {
   ListSchema,
   MessageSchema,
   TransitionSchema,
+  CustomerHistorySchema,
 } from "../src/server/schemas/conversations";
 import type { Conversation, SessionUser } from "../src/types/domain";
 import { AgentTurnSchema } from "../src/server/ai/schemas";
@@ -16,6 +17,21 @@ const customer: SessionUser = {
   email: "a@example.test",
   role: "chat",
 };
+
+test("customer history pagination is bounded and rejects client-supplied ownership", () => {
+  assert.equal(CustomerHistorySchema.parse({}).limit, 10);
+  assert.equal(CustomerHistorySchema.safeParse({ limit: 11 }).success, false);
+  assert.equal(
+    CustomerHistorySchema.safeParse({ customerId: "another-employee" }).success,
+    false,
+  );
+  assert.equal(
+    CustomerHistorySchema.safeParse({
+      cursor: { id: "forged", date: "invalid" },
+    }).success,
+    false,
+  );
+});
 const agent: SessionUser = {
   uid: "agent-a",
   name: "Atendente",
@@ -115,18 +131,31 @@ test("ownership and privileged fields cannot be injected via create input", () =
     startConversation: true,
     text: " Ajuda ",
   };
-  assert.equal(AgentTurnSchema.safeParse({ ...input,
-    customerId: "other",
-    role: "agent",
-    status: "closed",
-  }).success, false);
+  assert.equal(
+    AgentTurnSchema.safeParse({
+      ...input,
+      customerId: "other",
+      role: "agent",
+      status: "closed",
+    }).success,
+    false,
+  );
   assert.equal(AgentTurnSchema.parse(input).text, "Ajuda");
-  assert.equal(AgentTurnSchema.safeParse({ ...input, text: " \n " }).success, false);
-  assert.equal(AgentTurnSchema.safeParse({ ...input, subject: "Título injetado" }).success, false);
+  assert.equal(
+    AgentTurnSchema.safeParse({ ...input, text: " \n " }).success,
+    false,
+  );
+  assert.equal(
+    AgentTurnSchema.safeParse({ ...input, subject: "Título injetado" }).success,
+    false,
+  );
 });
 
 test("automatic titles preserve short messages, normalize whitespace and bound Unicode safely", () => {
-  assert.equal(conversationTitle("  Meu notebook\n  não conecta na VPN.  "), "Meu notebook não conecta na VPN.");
+  assert.equal(
+    conversationTitle("  Meu notebook\n  não conecta na VPN.  "),
+    "Meu notebook não conecta na VPN.",
+  );
   assert.equal(conversationTitle("Oi"), "Oi");
   assert.equal(conversationTitle("?"), "?");
   const title = conversationTitle("word ".repeat(100));

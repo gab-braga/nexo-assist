@@ -26,6 +26,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { Avatar } from "@/components/avatar";
 import { Status } from "@/components/status";
 import { logout } from "@/server/actions/auth";
+import { AnalystContext } from "./analyst-context";
+import { canProcessAgent } from "@/auth/conversation-state";
 import {
   useConversationWorkspace,
   type WorkspaceProps,
@@ -219,7 +221,9 @@ export function AgentWorkspace(props: WorkspaceProps) {
               <Status color={colors[item.status]}>
                 {item.agentId === user.uid && item.status === "active"
                   ? "Você está atendendo"
-                  : names[item.status]}
+                  : canProcessAgent(item)
+                    ? "Nexo Assist"
+                    : names[item.status]}
               </Status>
             </div>
           </button>
@@ -263,7 +267,11 @@ export function AgentWorkspace(props: WorkspaceProps) {
               {conversation?.customerName || "Selecione uma conversa"}
             </strong>
             <small className="text-[12px] text-muted-foreground">
-              {conversation ? names[conversation.status] : "Atendimentos"}
+              {conversation
+                ? canProcessAgent(conversation)
+                  ? "Nexo Assist"
+                  : names[conversation.status]
+                : "Atendimentos"}
             </small>
           </div>
           <div
@@ -275,10 +283,10 @@ export function AgentWorkspace(props: WorkspaceProps) {
                 <Button
                   disabled={pending}
                   variant="outline"
-                  onClick={() => change("release")}
+                  onClick={() => change("return_to_ai")}
                 >
                   <Bot />
-                  Devolver à fila
+                  Devolver à IA
                 </Button>
                 <Button
                   disabled={pending}
@@ -292,7 +300,9 @@ export function AgentWorkspace(props: WorkspaceProps) {
             ) : (
               conversation && (
                 <Status color={colors[conversation.status]} pill>
-                  {names[conversation.status]}
+                  {canProcessAgent(conversation)
+                    ? "Nexo Assist"
+                    : names[conversation.status]}
                 </Status>
               )
             )}
@@ -310,6 +320,17 @@ export function AgentWorkspace(props: WorkspaceProps) {
                   data-visual="dropdown"
                   className="absolute right-0 top-10.5 w-47.5 z-20 p-1.25 border border-border rounded-[10px] bg-card shadow-[0_5px_20px_#0001] [&>button]:p-2.25 [&>button]:text-left [&>button]:text-[12px] [&>button]:w-full [&>button]:rounded-md [&>button]:hover:bg-muted"
                 >
+                  {assumed && (
+                    <button
+                      disabled={pending}
+                      onClick={() => {
+                        change("release");
+                        setMenu(false);
+                      }}
+                    >
+                      Devolver à fila humana
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       if (isMobile) setMobileDetails(!mobileDetails);
@@ -442,6 +463,7 @@ export function AgentWorkspace(props: WorkspaceProps) {
                 aria-label="Mensagem"
                 placeholder="Escreva sua resposta..."
                 {...messageForm.register("text")}
+                disabled={pending}
                 aria-invalid={!!messageForm.formState.errors.text}
                 aria-describedby={
                   messageForm.formState.errors.text
@@ -495,6 +517,13 @@ export function AgentWorkspace(props: WorkspaceProps) {
           >
             <h3>Desta conversa</h3>
             {conversation && (
+              <AnalystContext
+                key={`${conversation._id}:${conversation.version}`}
+                conversation={conversation}
+                initial={props.analystContext}
+              />
+            )}
+            {conversation && (
               <div
                 data-visual="current-ticket"
                 className="rounded-[14px] bg-muted py-3.5 px-4 mb-7.5 [&>div]:flex [&>div]:items-center [&>div]:justify-between [&>div]:gap-1.25 [&>div]:mb-1 [&>strong]:text-[15px] [&>strong]:leading-5.5 [&>strong]:font-medium [&>p]:text-[13px] [&>p]:text-muted-foreground [&>p]:mt-0.5 [&>footer]:flex [&>footer]:gap-2 [&>footer]:items-center [&>footer]:border-t [&>footer]:mt-3.25 [&>footer]:pt-2.75 [&>footer]:text-[12px] [&>footer]:text-[#435066] [&>footer>small]:ml-auto"
@@ -504,7 +533,9 @@ export function AgentWorkspace(props: WorkspaceProps) {
                     {date(conversation.createdAt)}
                   </small>
                   <Status color={colors[conversation.status]}>
-                    {names[conversation.status]}
+                    {canProcessAgent(conversation)
+                      ? "Nexo Assist"
+                      : names[conversation.status]}
                   </Status>
                 </div>
                 <strong>{conversation.subject}</strong>
@@ -540,7 +571,9 @@ export function AgentWorkspace(props: WorkspaceProps) {
                   <div>
                     <strong>{item.subject}</strong>
                     <small className="text-[12px] text-muted-foreground">
-                      {names[item.status]}
+                      {canProcessAgent(item)
+                        ? "Nexo Assist"
+                        : names[item.status]}
                     </small>
                   </div>
                   <ChevronRight size={16} />
@@ -582,7 +615,8 @@ export function AgentWorkspace(props: WorkspaceProps) {
           >
             <strong className="block text-sm">{item.subject}</strong>
             <small className="text-[12px] text-muted-foreground">
-              {item.customerName} · {names[item.status]}
+              {item.customerName} ·{" "}
+              {canProcessAgent(item) ? "Nexo Assist" : names[item.status]}
             </small>
           </Link>
         ))}
@@ -620,8 +654,14 @@ function AgentMessage({
           data-visual="message-author"
           className="flex items-center justify-end gap-1.75 text-[11px] font-medium mb-1 pr-1.5 [&>span]:bg-[#dcebf9] [&>span]:text-primary [&>span]:rounded [&>span]:px-1.25 [&>span]:text-[10px] group-data-[from=agent]/message:[&>span]:bg-[#d9f0e3] group-data-[from=agent]/message:[&>span]:text-[#008557]"
         >
-          {from === "ai" ? "Nexo Assist" : author}
-          <span>{from === "ai" ? "IA" : "Atendente"}</span>
+          {author}
+          <span>
+            {author === "Atendimento"
+              ? "Sistema"
+              : from === "ai"
+                ? "IA"
+                : "Atendente"}
+          </span>
         </div>
       )}
       <div

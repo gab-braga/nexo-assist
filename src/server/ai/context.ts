@@ -12,6 +12,7 @@ export class NexoRunContext {
   calls = 0;
   handoffRequested = false;
   draftSummary: string | null = null;
+  handoffMessage: import("@/types/domain").Message | null = null;
   readonly audit: AgentAudit[] = [];
   constructor(
     readonly userId: string,
@@ -20,7 +21,10 @@ export class NexoRunContext {
     readonly signal: AbortSignal,
     readonly authenticate: () => Promise<SessionUser>,
     readonly assertActive: () => Promise<void>,
-    readonly requestHandoff: (reason: string, summary: string) => Promise<void>,
+    readonly requestHandoff: (
+      reason: string,
+      summary: string,
+    ) => Promise<import("@/types/domain").Message | void>,
     readonly rememberContext: (
       patch: ConversationContextPatch,
     ) => Promise<void>,

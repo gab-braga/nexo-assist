@@ -15,6 +15,7 @@ import { AI_LIMITS } from "@/server/ai/config";
 import { PROMPT_VERSION } from "@/server/ai/prompts/nexo";
 import type { AgentTurnInput } from "@/server/ai/schemas";
 import { createConversationRecord } from "./conversations";
+import { transferToHuman } from "./handoff";
 import { conversationTitle } from "@/lib/conversation-title";
 import { conversationState } from "@/auth/conversation-state";
 import { ConversationContextPatchSchema } from "@/server/ai/schemas";
@@ -27,14 +28,7 @@ export function assertAgentConversation(
   if (!conversation || conversation.customerId !== userId)
     throw new AppError("NOT_FOUND", "Atendimento não encontrado.");
   if (
-    (conversationState(conversation) !== "AGENT_ACTIVE" &&
-      !(
-        run &&
-        conversation.status === "waiting" &&
-        !conversation.agentId &&
-        conversation.aiEnabled &&
-        conversation.aiHandoff
-      )) ||
+    conversationState(conversation) !== "AGENT_ACTIVE" ||
     (run &&
       (conversation.aiActiveRunId !== run._id ||
         (conversation.aiControlVersion ?? 0) !== run.controlVersion))
@@ -116,7 +110,12 @@ export interface AgentRunRepository {
   remember(run: AgentRun, patch: ConversationContextPatch): Promise<void>;
   recover(conversationId: string, customerId: string): Promise<boolean>;
   assertActive(run: AgentRun): Promise<void>;
-  handoff(run: AgentRun, reason: string, summary: string): Promise<void>;
+  handoff(
+    run: AgentRun,
+    reason: string,
+    summary: string,
+    audit?: AgentAudit[],
+  ): Promise<Message | void>;
   finish(
     run: AgentRun,
     text: string | null,
@@ -370,6 +369,7 @@ const mongoAgentRuns: AgentRunRepository = {
       : null;
     return {
       flow: conversation!.flow,
+      analystSummary: conversation!.analystSummary,
       initialMessage,
       recentMessages,
       selectedTicket: ticket
@@ -536,53 +536,16 @@ const mongoAgentRuns: AgentRunRepository = {
       .findOne({ _id: run.conversationId });
     assertAgentConversation(conversation, run.customerId, run);
   },
-  async handoff(run, reason, summary) {
-    const db = await database();
-    const session = db.client.startSession();
-    try {
-      await session.withTransaction(async () => {
-        const conversations = db.collection<Conversation>("conversations");
-        const conversation = await conversations.findOne(
-          { _id: run.conversationId },
-          { session },
-        );
-        assertAgentConversation(conversation, run.customerId, run);
-        const saved = await conversations.updateOne(
-          { _id: run.conversationId, version: conversation!.version },
-          {
-            $set: { aiHandoff: true, updatedAt: new Date() },
-            $inc: { version: 1 },
-          },
-          { session },
-        );
-        if (saved.modifiedCount !== 1)
-          throw new AppError("CONFLICT", "A conversa mudou.");
-        await db
-          .collection<{
-            _id: string;
-            conversationId: string;
-            actorId: string;
-            operation: string;
-            reason: string;
-            summary: string;
-            createdAt: Date;
-          }>("conversation_events")
-          .insertOne(
-            {
-              _id: randomUUID(),
-              conversationId: run.conversationId,
-              actorId: run.customerId,
-              operation: "request_human",
-              reason,
-              summary,
-              createdAt: new Date(),
-            },
-            { session },
-          );
-      });
-    } finally {
-      await session.endSession();
-    }
+  async handoff(run, reason, summary, audit = []) {
+    return transferToHuman({
+      customerId: run.customerId,
+      conversationId: run.conversationId,
+      requestId: run._id,
+      reason,
+      summary,
+      run,
+      audit,
+    });
   },
   async finish(run, text, audit, usage, code) {
     const db = await database();
@@ -709,8 +672,10 @@ export const agentRunRepository: AgentRunRepository = {
     databaseOperation(() => mongoAgentRuns.recover(id, owner)),
   assertActive: (run) =>
     databaseOperation(() => mongoAgentRuns.assertActive(run)),
-  handoff: (run, reason, summary) =>
-    databaseOperation(() => mongoAgentRuns.handoff(run, reason, summary)),
+  handoff: (run, reason, summary, audit) =>
+    databaseOperation(() =>
+      mongoAgentRuns.handoff(run, reason, summary, audit),
+    ),
   finish: (run, text, audit, usage, code) =>
     databaseOperation(() =>
       mongoAgentRuns.finish(run, text, audit, usage, code),

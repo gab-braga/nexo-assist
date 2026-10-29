@@ -3,6 +3,7 @@ import { ConversationWorkspace } from "./conversation-workspace";
 import {
   getMessages,
   listConversations,
+  getAnalystContext,
 } from "@/server/services/conversations";
 import { result } from "@/server/lib/errors";
 import type { UserRole } from "@/types/domain";
@@ -51,7 +52,10 @@ export async function ConversationPage({ role, searchParams }: Props) {
       role === "chat" && id && !before
         ? await result(() => ticketService.getConversationInteraction(id))
         : null;
+    const analystContext =
+      role === "agent" && id ? await result(() => getAnalystContext(id)) : null;
     return {
+      analystContext: analystContext?.ok ? analystContext.data : null,
       list,
       conversation: history?.conversation ?? null,
       history,

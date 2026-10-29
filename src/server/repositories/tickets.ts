@@ -21,6 +21,9 @@ export interface TicketTransaction {
     draftId?: string;
     reason?: string;
     summary?: string;
+    previousState?: string;
+    newState?: string;
+    outcome?: string;
     digest?: string;
   }): Promise<void>;
   lockCustomer(customerId: string): Promise<void>;

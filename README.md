@@ -1,5 +1,9 @@
 # Nexo Assist
 
+No chat do funcionário, “Meus atendimentos” abre o histórico em um modal com título, última interação, status e prévia da mensagem. A lista carrega dez conversas por página e permite retomar o mesmo atendimento com IA ou analista; conversas encerradas permanecem disponíveis somente para consulta. A abertura do histórico não cria registros. Valide esse fluxo com `npm run test:history:ui` usando o servidor local e o Chrome.
+
+O atendimento humano da [Fase 6](docs/fase-6-handoff-atendimento-humano.md) integra transferência, pausa da IA, resumo no console, atribuição, mensagens humanas, devolução à IA e encerramento seguro na conversa existente.
+
 O serviço de chamados da Fase 2 está documentado em [docs/fase-2-servico-de-chamados.md](docs/fase-2-servico-de-chamados.md), incluindo confirmação, regras de prazo, operações, seed e verificações.
 
 O núcleo de IA da Fase 3 usa Mastra e OpenAI no servidor, com streaming no chat existente. Consulte [configuração, ferramentas e limites](docs/fase-3-agente-mastra.md). Defina `OPENAI_API_KEY` e, opcionalmente, `NEXO_AI_MODEL` no ambiente local. A [Fase 4](docs/fase-4-memoria-persistencia.md) mantém memória e histórico persistentes. A [Fase 5](docs/fase-5-fluxos-inteligentes.md) integra coleta, consulta/seleção, rascunho, confirmação explícita, atualização, reabertura e cancelamento ao chat.

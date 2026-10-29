@@ -32,6 +32,7 @@ import {
 } from "@/server/policies/tickets";
 import type { SessionUser } from "@/types/domain";
 import { canProcessAgent } from "@/auth/conversation-state";
+import { buildHandoffSummary } from "@/server/policies/handoff";
 import { prioritySla, operationNames } from "@/lib/ticket-display";
 import type {
   Ticket,
@@ -362,6 +363,9 @@ export function createTicketService(deps: {
                   ? "requested"
                   : "overdue",
             summary: `${ticket.number}: ${ticket.title}. Prioridade: ${priority}.`,
+            previousState: "AGENT_ACTIVE",
+            newState: "WAITING_FOR_ANALYST",
+            outcome: "success",
             createdAt: timestamp,
           });
         await tx.saveConversation(
@@ -373,6 +377,27 @@ export function createTicketService(deps: {
               ? {
                   aiHandoff: true,
                   aiControlVersion: (conversation.aiControlVersion ?? 0) + 1,
+                  handoff: {
+                    id: draft._id,
+                    requestedAt: timestamp.toISOString(),
+                    reason:
+                      priority === "critical"
+                        ? ("critical" as const)
+                        : ticket.status === "waiting_human"
+                          ? ("requested" as const)
+                          : ("overdue" as const),
+                    summary: {
+                      ...buildHandoffSummary(
+                        { ...conversation, pendingDraftId: null },
+                        `${ticket.number}: ${ticket.title}`,
+                        [],
+                        [response],
+                      ),
+                      operations: [
+                        `${operationNames[draft.operation]} confirmada: ${ticket.number}`,
+                      ],
+                    },
+                  },
                 }
               : {}),
             version: conversation.version + 1,

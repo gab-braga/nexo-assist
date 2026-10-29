@@ -23,10 +23,16 @@ export function buildAgentMemory(
       : { role: "assistant", content };
   }
   // Only authorized references and bounded data, never tokens, digests or credentials.
-  if (snapshot.selectedTicket || snapshot.pendingOperation || snapshot.flow) {
+  if (
+    snapshot.selectedTicket ||
+    snapshot.pendingOperation ||
+    snapshot.flow ||
+    snapshot.analystSummary
+  ) {
     const operation = snapshot.pendingOperation;
     const state = JSON.stringify({
       selectedTicket: snapshot.selectedTicket,
+      analystSummary: snapshot.analystSummary?.slice(0, 1200),
       pendingOperation: operation && {
         ...operation,
         data: {

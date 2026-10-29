@@ -1,5 +1,5 @@
 import { loadEnvConfig } from "@next/env";
-import { chromium, expect } from "@playwright/test";
+import { chromium, expect as baseExpect } from "@playwright/test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { Conversation, Message } from "../src/types/domain";
@@ -7,6 +7,8 @@ import type { AgentRun } from "../src/types/ai";
 import type { AgentTurnInput } from "../src/server/ai/schemas";
 import type { Ticket, TicketData, TicketDraft } from "../src/types/tickets";
 loadEnvConfig(process.cwd());
+// These checks include real Firestore transactions and Server Component refreshes.
+const expect = baseExpect.configure({ timeout: 25000 });
 
 async function main() {
   const { database } = await import("../src/server/lib/mongodb");

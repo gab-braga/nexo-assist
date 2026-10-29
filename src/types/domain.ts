@@ -41,6 +41,22 @@ export type ConversationFlow = {
   ticketIds?: string[];
 };
 
+export type HandoffReason = "requested" | "critical" | "overdue" | "uncertain";
+export type HandoffSummary = {
+  problem: string;
+  information: string[];
+  relatedTickets: {
+    id: string;
+    number: string;
+    title: string;
+    status: string;
+  }[];
+  guidance: string[];
+  operations: string[];
+  pending: string[];
+  agentNote: string;
+};
+
 export type SessionUser = {
   uid: string;
   name: string;
@@ -49,6 +65,17 @@ export type SessionUser = {
 };
 
 export type Conversation = {
+  handoff?: {
+    id: string;
+    messageId?: string;
+    reason: HandoffReason;
+    requestedAt: string;
+    summary: HandoffSummary;
+  };
+  assignedAt?: string | null;
+  returnedAt?: string | null;
+  closedAt?: string | null;
+  analystSummary?: string;
   _id: string;
   customerId: string;
   customerName: string;

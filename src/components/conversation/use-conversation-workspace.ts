@@ -17,6 +17,8 @@ import { useRouter } from "next/navigation";
 import {
   sendMessage,
   transitionConversation,
+  getMessages as fetchMessages,
+  requestHumanSupport,
 } from "@/server/actions/conversations";
 import type { ConversationDTO, MessageDTO, SessionUser } from "@/types/domain";
 import { AgentStreamError, consumeAgentStream } from "@/lib/agent-stream";
@@ -27,6 +29,7 @@ import type {
 } from "@/server/services/conversations";
 
 export type WorkspaceProps = {
+  analystContext?: Awaited<ReturnType<typeof import("@/server/services/conversations").getAnalystContext>> | null;
   interaction?: import("@/types/tickets").ConversationInteraction | null;
   user: SessionUser;
   list: Awaited<ReturnType<typeof listConversations>>;
@@ -54,6 +57,12 @@ export function useConversationWorkspace({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [, refreshTransition] = useTransition();
+  const [connectionError, setConnectionError] = useState("");
+  const transitionRequest = useRef<{ id: string; operation: string; conversationId: string; version: number } | null>(null);
+  const handoffRequest = useRef<{ requestId: string; conversationId: string } | null>(null);
+  const handoffSending = useRef(false);
+  const [humanPending, setHumanPending] = useState(false);
   const [streamMessages, setStreamMessages] = useState<MessageDTO[]>([]);
   const [createdConversation, setCreatedConversation] =
     useState<ConversationDTO | null>(null);
@@ -83,20 +92,36 @@ export function useConversationWorkspace({
   }
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    let current = true;
+    const refresh = () => {
       // A refresh would remount the newly-created route and discard a failed
       // first-send draft. Refresh it only after success or explicit navigation.
-      if (!document.hidden && !pending && !older && !createdConversation)
-        startTransition(() => router.refresh());
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [router, pending, older, createdConversation]);
+      if (document.hidden || pending || older) return;
+      if (!navigator.onLine) { setConnectionError("Sem conexão. As mensagens serão atualizadas quando a conexão retornar."); return; }
+      setConnectionError("");
+      if (createdConversation) {
+        const attempt = generation.current;
+        void fetchMessages({ conversationId: createdConversation._id }).then(result => {
+          if (!current || generation.current !== attempt) return;
+          if (result.ok) { setCreatedConversation(result.data.conversation); setStreamMessages(result.data.items); }
+          else setConnectionError(result.error);
+        }).catch(() => { if (current) setConnectionError("Não foi possível atualizar o histórico. Tentaremos novamente."); });
+      } else refreshTransition(() => router.refresh());
+    };
+    const timer = setInterval(refresh, conversation && (!conversation.aiEnabled || conversation.aiHandoff || conversation.status === "active") ? 5000 : 10000);
+    window.addEventListener("online", refresh);
+    window.addEventListener("focus", refresh);
+    return () => { current = false; clearInterval(timer); window.removeEventListener("online", refresh); window.removeEventListener("focus", refresh); };
+  }, [router, pending, older, createdConversation, conversation]);
 
   function newConversation() {
     generation.current++;
     activeRequest.current?.abort();
     sending.current = false;
     request.current = null;
+    handoffRequest.current = null;
+    handoffSending.current = false;
+    setHumanPending(false);
     setStartingNew(true);
     setCreatedConversation(null);
     setStreamMessages([]);
@@ -115,14 +140,14 @@ export function useConversationWorkspace({
     setError("");
     const next: PendingMessage =
       request.current?.text === text &&
-      (!conversation || request.current.conversationId === conversation._id)
+        (!conversation || request.current.conversationId === conversation._id)
         ? request.current
         : {
-            id: crypto.randomUUID(),
-            text,
-            conversationId: conversation?._id ?? crypto.randomUUID(),
-            ...(!conversation ? { startConversation: true as const } : {}),
-          };
+          id: crypto.randomUUID(),
+          text,
+          conversationId: conversation?._id ?? crypto.randomUUID(),
+          ...(!conversation ? { startConversation: true as const } : {}),
+        };
     request.current = next;
     startTransition(async () => {
       try {
@@ -282,29 +307,80 @@ export function useConversationWorkspace({
     return messageForm.handleSubmit(submitMessage)(event);
   }
 
-  function change(operation: "assume" | "release" | "close") {
+  function change(operation: "assume" | "release" | "return_to_ai" | "close") {
     if (!conversation) return;
+    if (sending.current) return;
+    sending.current = true;
     setError("");
+    const next = transitionRequest.current?.conversationId === conversation._id && transitionRequest.current.operation === operation
+      ? transitionRequest.current : { id: crypto.randomUUID(), operation, conversationId: conversation._id, version: conversation.version };
+    transitionRequest.current = next;
     startTransition(async () => {
-      const result = await transitionConversation({
-        conversationId: conversation._id,
-        version: conversation.version,
-        operation,
-      });
-      if (!result.ok) setError(result.error);
-      router.refresh();
+      try {
+        const result = await transitionConversation({
+          requestId: next.id,
+          conversationId: conversation._id,
+          version: next.version,
+          operation,
+        });
+        if (!result.ok) setError(result.error);
+        if (result.ok || !["PERSISTENCE_UNAVAILABLE", "INTERNAL"].includes(result.code)) transitionRequest.current = null;
+        router.refresh();
+      } catch { setError("Não foi possível verificar a alteração. Repita a mesma ação para consultar o resultado."); }
+      finally { sending.current = false; }
     });
+  }
+
+  function navigate(target: string) {
+    const nextId = new URL(target, window.location.href).searchParams.get("conversation");
+    if (nextId !== conversation?._id) {
+      generation.current++;
+      activeRequest.current?.abort();
+      activeRequest.current = null;
+      sending.current = false;
+      request.current = null;
+    }
+    startTransition(() => router.push(target));
   }
 
   const canReply = conversation
     ? conversation.status !== "closed" &&
-      (user.role === "chat" || conversation.agentId === user.uid)
+    (user.role === "chat" || conversation.agentId === user.uid)
     : user.role === "chat";
+
+  function requestHuman() {
+    if (!conversation || handoffSending.current) return;
+    handoffSending.current = true;
+    setHumanPending(true);
+    generation.current++;
+    const attempt = generation.current;
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    sending.current = false;
+    setStreamMessages(messages => messages.filter(message => message.role === "chat"));
+    const next = handoffRequest.current?.conversationId === conversation._id ? handoffRequest.current
+      : { requestId: crypto.randomUUID(), conversationId: conversation._id };
+    handoffRequest.current = next;
+    setError("");
+    startTransition(async () => {
+      try {
+        const result = await requestHumanSupport(next);
+        if (generation.current !== attempt) return;
+        if (!result.ok) { setError(result.error); return; }
+        handoffRequest.current = null;
+        if (createdConversation) {
+          const snapshot = await fetchMessages({ conversationId: next.conversationId });
+          if (snapshot.ok) { setCreatedConversation(snapshot.data.conversation); setStreamMessages(snapshot.data.items); }
+        } else { setStreamMessages([]); router.refresh(); }
+      } catch { setError("Não foi possível verificar a transferência. Tente novamente para consultar o resultado."); }
+      finally { if (generation.current === attempt) { handoffSending.current = false; setHumanPending(false); } }
+    });
+  }
 
   return {
     conversation,
     pending,
-    error,
+    error: error || connectionError,
     streamMessages,
     text,
     messageForm,
@@ -313,7 +389,9 @@ export function useConversationWorkspace({
     change,
     canReply,
     newConversation,
-    navigate: router.push,
+    requestHuman,
+    humanPending,
+    navigate,
     reply: (message: string) => {
       if (sending.current || pending) return;
       messageForm.setValue("text", message);

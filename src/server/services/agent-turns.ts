@@ -94,6 +94,7 @@ export function createAgentTurnService(deps: {
     return (async function* (): AsyncGenerator<AgentStreamEvent> {
       let terminal = run.state !== "running";
       let scope: NexoRunContext | null = null;
+      let execution: AbortController | null = null;
       let usage: AgentRun["usage"] = null;
       try {
         yield {
@@ -132,7 +133,12 @@ export function createAgentTurnService(deps: {
           return;
         }
         const timeout = AbortSignal.timeout(AI_LIMITS.timeoutMs);
-        const signal = AbortSignal.any([clientSignal, timeout]);
+        const transferred = (execution = new AbortController());
+        const signal = AbortSignal.any([
+          clientSignal,
+          timeout,
+          transferred.signal,
+        ]);
         scope = new NexoRunContext(
           user.uid,
           run.conversationId,
@@ -140,7 +146,19 @@ export function createAgentTurnService(deps: {
           signal,
           authenticate,
           () => deps.repository.assertActive(run),
-          (reason, summary) => deps.repository.handoff(run, reason, summary),
+          async (reason, summary) => {
+            const notice = await deps.repository.handoff(
+              run,
+              reason,
+              summary,
+              scope?.audit,
+            );
+            if (notice) {
+              scope!.handoffMessage = notice;
+              transferred.abort();
+            }
+            return notice;
+          },
           (patch) => deps.repository.remember(run, patch),
         );
         const requestContext = new RequestContext<{ nexo: NexoRunContext }>();
@@ -167,6 +185,7 @@ export function createAgentTurnService(deps: {
           let buffered = "";
           let flushedAt = Date.now();
           for await (const chunk of output.fullStream) {
+            if (scope.handoffMessage) break;
             if (signal.aborted)
               throw new AppError(
                 "TIMEOUT",
@@ -210,6 +229,11 @@ export function createAgentTurnService(deps: {
               }
             }
           }
+          if (scope.handoffMessage) {
+            terminal = true;
+            yield { type: "completed", message: dto(scope.handoffMessage) };
+            return;
+          }
           const consumed = await output.usage;
           usage = {
             inputTokens: consumed.inputTokens ?? 0,
@@ -244,6 +268,11 @@ export function createAgentTurnService(deps: {
           terminal = true;
           yield { type: "completed", message: dto(saved) };
         } catch (error) {
+          if (scope.handoffMessage) {
+            terminal = true;
+            yield { type: "completed", message: dto(scope.handoffMessage) };
+            return;
+          }
           console.error("Agent execution failed", {
             runId: run._id,
             ...providerFailureMetadata(error),
@@ -267,6 +296,7 @@ export function createAgentTurnService(deps: {
           yield { type: "error", ...failure };
         }
       } finally {
+        execution?.abort();
         // Closing a reader, including before its first delta, never replays tools.
         if (!terminal) {
           try {

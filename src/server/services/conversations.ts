@@ -1,12 +1,11 @@
 import "server-only";
 import type { Filter } from "mongodb";
-import { randomUUID } from "node:crypto";
 import { requireUser } from "@/auth/guards";
 import { canReadConversation, canSendMessage } from "@/auth/policy";
 import { AppError } from "@/server/lib/errors";
 import {
   appendMessage,
-  transitionRecord,
+  applyConversationTransition,
   findConversation,
   findConversations,
   findMessages,
@@ -16,6 +15,9 @@ import {
   ListSchema,
   MessageSchema,
   TransitionSchema,
+  AnalystContextSchema,
+  HumanSupportSchema,
+  CustomerHistorySchema,
 } from "@/server/schemas/conversations";
 import type {
   Conversation,
@@ -27,6 +29,8 @@ import { IdSchema } from "@/server/schemas/uuid";
 import { conversationState, canProcessAgent } from "@/auth/conversation-state";
 import { agentRunRepository } from "@/server/repositories/agent-runs";
 import { messageHistoryFilter } from "@/server/policies/message-history";
+import { ticketService } from "./tickets";
+import { transferToHuman } from "@/server/repositories/handoff";
 
 function checkAccess(
   user: SessionUser,
@@ -68,7 +72,18 @@ export async function listConversations(input: unknown = {}) {
     if (user.role !== "agent")
       throw new AppError("FORBIDDEN", "Filtro não permitido.");
     filter.agentId = user.uid;
+  } else if (query.status === "ai") {
+    filter.status = "waiting";
+    filter.aiEnabled = true;
+    filter.aiHandoff = { $ne: true };
+    filter.agentId = null;
   } else if (query.status !== "all") filter.status = query.status;
+  if (user.role === "agent" && query.status === "waiting") {
+    filter.agentId = null;
+    filter.$and = [
+      { $or: [{ aiEnabled: { $ne: true } }, { aiHandoff: true }] },
+    ];
+  }
   if (query.search) {
     const escaped = query.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     filter.$or = [
@@ -78,6 +93,7 @@ export async function listConversations(input: unknown = {}) {
   }
   if (query.cursor) {
     filter.$and = [
+      ...(filter.$and ?? []),
       {
         $or: [
           { updatedAt: { $lt: new Date(query.cursor.date) } },
@@ -103,6 +119,32 @@ export async function getConversation(input: unknown) {
   const user = await requireUser();
   const conversation = await readConversation(user, IdSchema.parse(input));
   return serialize(conversation);
+}
+
+export async function listCustomerHistory(input: unknown = {}) {
+  await requireUser("chat");
+  const query = CustomerHistorySchema.parse(input);
+  const page = await listConversations(query);
+  const items = await Promise.all(
+    page.items.map(async (conversation) => {
+      const [last] = await findMessages(
+        { conversationId: conversation._id },
+        1,
+      );
+      return {
+        _id: conversation._id,
+        subject: conversation.subject,
+        updatedAt: conversation.updatedAt,
+        operationalState: conversationState(conversation),
+        lastMessagePreview: last
+          ? Array.from(last.text.replace(/\s+/g, " ").trim())
+              .slice(0, 180)
+              .join("")
+          : null,
+      };
+    }),
+  );
+  return { items, nextCursor: page.nextCursor };
 }
 
 export async function getMessages(input: unknown) {
@@ -176,41 +218,31 @@ export async function sendMessage(input: unknown) {
 export async function transitionConversation(input: unknown) {
   const user = await requireUser("agent");
   const data = TransitionSchema.parse(input);
-  const filter: Filter<Conversation> = {
-    _id: data.conversationId,
-    version: data.version,
-  };
-  if (data.operation === "assume") {
-    filter.status = "waiting";
-    filter.agentId = null;
-  } else {
-    filter.status = "active";
-    filter.agentId = user.uid;
-  }
-  const now = new Date();
-  const update =
-    data.operation === "assume"
-      ? {
-          status: "active" as const,
-          agentId: user.uid,
-          agentName: user.name,
-          updatedAt: now,
-        }
-      : {
-          status:
-            data.operation === "close"
-              ? ("closed" as const)
-              : ("waiting" as const),
-          agentId: data.operation === "close" ? user.uid : null,
-          agentName: data.operation === "close" ? user.name : null,
-          ...(data.operation === "release" ? { aiHandoff: true } : {}),
-          updatedAt: now,
-        };
-  await transitionRecord(filter, update, {
-    _id: randomUUID(),
-    conversationId: data.conversationId,
-    actorId: user.uid,
-    operation: data.operation,
-    createdAt: now,
+  await applyConversationTransition(user, data);
+}
+
+export async function getAnalystContext(input: unknown) {
+  const user = await requireUser("agent");
+  const query = AnalystContextSchema.parse(
+    typeof input === "string" ? { conversationId: input } : input,
+  );
+  const conversation = await readConversation(user, query.conversationId);
+  const tickets = await ticketService.listAdministrativeTickets({
+    customerId: conversation.customerId,
+    cursor: query.cursor,
+    limit: 10,
+  });
+  return { tickets: tickets.items, nextCursor: tickets.nextCursor };
+}
+
+export async function requestHumanSupport(input: unknown) {
+  const user = await requireUser("chat");
+  const query = HumanSupportSchema.parse(input);
+  await transferToHuman({
+    ...query,
+    customerId: user.uid,
+    reason: "requested",
+    summary:
+      "Solicitação explícita de atendimento humano pelo funcionário no chat.",
   });
 }

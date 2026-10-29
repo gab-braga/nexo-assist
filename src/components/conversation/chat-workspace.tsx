@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { ArrowUp, Plus } from "lucide-react";
+import { ArrowUp, Plus, Headset } from "lucide-react";
+import { canProcessAgent } from "@/auth/conversation-state";
 import { FieldError } from "@/components/ui/field";
 import { ConversationFilters } from "./conversation-filters";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Status } from "@/components/status";
 import { messageProcessingFeedback } from "@/lib/message-processing";
 import { ConversationFlowPanel } from "./conversation-flow-panel";
 import { TicketCard } from "./ticket-card";
+import { CustomerHistoryDialog } from "./customer-history-dialog";
 import {
   useConversationWorkspace,
   type WorkspaceProps,
@@ -53,6 +54,8 @@ export function ChatWorkspace(props: WorkspaceProps) {
     canReply,
     navigate,
     reply,
+    requestHuman,
+    humanPending,
   } = useConversationWorkspace(props);
   const visibleMessages = [
     ...(history?.items ?? []),
@@ -60,8 +63,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
       (message) => !history?.items.some((saved) => saved._id === message._id),
     ),
   ];
-  const [showHistory, setShowHistory] = useState(false);
-  const mode = conversation || showHistory ? "consult" : "new";
+  const mode = conversation ? "consult" : "new";
   const lastMessage = history?.items.at(-1);
   const processing =
     !pending && !older && lastMessage?.role === "chat"
@@ -82,20 +84,39 @@ export function ChatWorkspace(props: WorkspaceProps) {
     >
       <div
         data-visual="chat-tools"
-        className="absolute top-4 right-0 flex gap-3 text-muted-foreground text-2.75 opacity-0 transition-opacity duration-200 group-hover/chat:opacity-100 focus-within:opacity-100 [&>button]:flex [&>button]:items-center [&>button]:gap-0.75 max-[800.001px]:opacity-100 max-[800.001px]:top-3"
+        className="absolute top-4 right-0 flex flex-wrap justify-end max-w-full gap-x-3 gap-y-1 text-muted-foreground text-2.75 opacity-0 transition-opacity duration-200 group-hover/chat:opacity-100 focus-within:opacity-100 [&>button]:flex [&>button]:items-center [&>button]:gap-0.75 max-[800.001px]:opacity-100 max-[800.001px]:top-3"
       >
         <button
           onClick={() => {
-            setShowHistory(false);
             newConversation();
           }}
         >
           <Plus size={13} />
           Novo atendimento
         </button>
-        <button onClick={() => setShowHistory(true)}>
-          Consultar atendimentos
-        </button>
+        <CustomerHistoryDialog
+          select={(id) =>
+            navigate(
+              href({
+                conversation: id,
+                before: null,
+                cursor: null,
+                search: null,
+                status: "all",
+              }),
+            )
+          }
+        />
+        {conversation && canProcessAgent(conversation) && (
+          <button
+            disabled={humanPending}
+            aria-label="Solicitar atendimento humano"
+            onClick={requestHuman}
+          >
+            <Headset size={13} />
+            {humanPending ? "Encaminhando…" : "Atendimento humano"}
+          </button>
+        )}
       </div>
       <div
         data-visual="customer-transcript"

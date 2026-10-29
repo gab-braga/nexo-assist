@@ -6,14 +6,17 @@ export function Dialog({
   onOpenChange,
   title,
   children,
+  trigger,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   children: React.ReactNode;
+  trigger?: React.ReactNode;
 }) {
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
+      {trigger && <D.Trigger asChild>{trigger}</D.Trigger>}
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-40 bg-slate-950/30" />
         <D.Content

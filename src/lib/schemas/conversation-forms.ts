@@ -17,6 +17,7 @@ export const StatusSchema = z.enum([
   "active",
   "closed",
   "mine",
+  "ai",
 ]);
 
 export const MessageFormSchema = z.object({ text: MessageTextSchema });

@@ -92,6 +92,11 @@ export function ConversationFilters({
             </NativeSelectOption>
             <NativeSelectOption value="closed">Encerrados</NativeSelectOption>
             {role === "agent" && (
+              <NativeSelectOption value="ai">
+                Com Nexo Assist
+              </NativeSelectOption>
+            )}
+            {role === "agent" && (
               <NativeSelectOption value="mine">
                 Meus atendimentos
               </NativeSelectOption>

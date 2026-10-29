@@ -1,7 +1,7 @@
 import "server-only";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { runTool } from "../context";
+import { runTool, type NexoRunContext } from "../context";
 import {
   IntentSchema,
   rationaleSchema,
@@ -24,6 +24,27 @@ function ticketSummary(ticket: TicketDTO) {
   const { description: _description, ...summary } = ticket;
   void _description;
   return summary;
+}
+
+async function transfer(
+  scope: NexoRunContext,
+  reason: string,
+  summary: string,
+) {
+  if (scope.handoffRequested) return;
+  scope.handoffMessage = (await scope.requestHandoff(reason, summary)) ?? null;
+  scope.handoffRequested = true;
+}
+async function checkHumanNeed(scope: NexoRunContext, ticket: TicketDTO) {
+  if (
+    ticket.status !== "resolved" &&
+    (ticket.priority === "critical" || ticket.overdue)
+  )
+    await transfer(
+      scope,
+      ticket.priority === "critical" ? "critical" : "overdue",
+      `${ticket.number}: ${ticket.title}. Prioridade ${ticket.priority}. Prazo de resposta ${ticket.nextResponseDueAt}.`,
+    );
 }
 
 export function createNexoTools(services: {
@@ -211,6 +232,7 @@ export function createNexoTools(services: {
               selectedTicketId: ticket._id,
               flow: { intent: "status", stage: "idle" },
             });
+            await checkHumanNeed(scope, ticket);
             return ticket;
           },
         ),
@@ -236,6 +258,7 @@ export function createNexoTools(services: {
               selectedTicketId: ticket._id,
               flow: { intent: "status", stage: "idle" },
             });
+            await checkHumanNeed(scope, ticket);
             return {
               _id: ticket._id,
               number: ticket.number,
@@ -244,11 +267,13 @@ export function createNexoTools(services: {
               nextResponseDueAt: ticket.nextResponseDueAt,
               overdue: ticket.overdue,
               handoffReason:
-                ticket.priority === "critical"
-                  ? "critical"
-                  : ticket.overdue
-                    ? "overdue"
-                    : null,
+                ticket.status === "resolved"
+                  ? null
+                  : ticket.priority === "critical"
+                    ? "critical"
+                    : ticket.overdue
+                      ? "overdue"
+                      : null,
             };
           },
         ),
@@ -308,7 +333,16 @@ export function createNexoTools(services: {
           "create",
           input.rationale,
           { impact: input.impact, urgency: input.urgency },
-          async () => ({ priority: ticketPriority(input) }),
+          async (scope) => {
+            const priority = ticketPriority(input);
+            if (priority === "critical")
+              await transfer(
+                scope,
+                "critical",
+                "Impacto informado: equipe ou empresa impedida de trabalhar. Incidente classificado como crítico pelo serviço.",
+              );
+            return { priority };
+          },
         ),
     }),
     prepareTicketDraft: createTool({
@@ -330,6 +364,17 @@ export function createNexoTools(services: {
           { operation: input.change.operation },
           async (scope) => {
             // The confirmation capability MUST NOT enter model context or audit logs.
+            if (
+              input.change.data &&
+              ticketPriority(input.change.data) === "critical"
+            ) {
+              await transfer(
+                scope,
+                "critical",
+                `Incidente crítico: ${input.change.data.title}. ${input.change.data.description.slice(0, 600)}`,
+              );
+              return { executed: false, transferred: true };
+            }
             const prepared = await services.tickets.prepareTicketChange(
               input.change,
               { conversationId: scope.conversationId, runId: scope.runId },
@@ -368,8 +413,7 @@ export function createNexoTools(services: {
           input.rationale,
           { reason: input.reason },
           async (scope) => {
-            await scope.requestHandoff(input.reason, input.summary);
-            scope.handoffRequested = true;
+            await transfer(scope, input.reason, input.summary);
             return { state: "waiting_human", executed: true };
           },
         ),
