@@ -19,6 +19,13 @@ const eventSchema = z.discriminatedUnion("type", [
       role: z.literal("assistant"),
       text: z.string(),
       createdAt: z.string(),
+      sequence: z.number().int().optional(),
+      runId: z.string().optional(),
+      processingState: z
+        .enum(["processing", "completed", "interrupted", "failed"])
+        .optional(),
+      processingErrorCode: z.string().nullable().optional(),
+      decisionRefs: z.array(z.string()).optional(),
     }),
   }),
 ]);

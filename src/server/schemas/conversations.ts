@@ -27,5 +27,11 @@ export const TransitionSchema = z.object({
 
 export const HistorySchema = z.object({
   conversationId: IdSchema,
-  cursor: z.object({ date: z.iso.datetime(), id: IdSchema }).optional(),
+  cursor: z
+    .object({
+      date: z.iso.datetime(),
+      id: IdSchema,
+      sequence: z.number().int().min(1).optional(),
+    })
+    .optional(),
 });

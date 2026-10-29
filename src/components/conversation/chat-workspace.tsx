@@ -8,6 +8,7 @@ import { FieldError } from "@/components/ui/field";
 import { ConversationFilters } from "./conversation-filters";
 import { Button } from "@/components/ui/button";
 import { Status } from "@/components/status";
+import { messageProcessingFeedback } from "@/lib/message-processing";
 import {
   useConversationWorkspace,
   type WorkspaceProps,
@@ -58,6 +59,12 @@ export function ChatWorkspace(props: WorkspaceProps) {
   ];
   const [showHistory, setShowHistory] = useState(false);
   const mode = conversation || showHistory ? "consult" : "new";
+  const lastMessage = history?.items.at(-1);
+  const processing =
+    !pending && !older && lastMessage?.role === "chat"
+      ? messageProcessingFeedback(lastMessage)
+      : null;
+  const feedback = error || processing?.text;
 
   return (
     <main
@@ -65,7 +72,8 @@ export function ChatWorkspace(props: WorkspaceProps) {
       className={cn(
         "group/chat max-w-202 mx-auto relative h-[calc(100dvh-64px)] flex flex-col pt-18.25 max-[1250.001px]:mx-8 max-[1250.001px]:max-w-none max-[800.001px]:mx-5 max-[800.001px]:pt-11.25 max-[540.001px]:h-[calc(100dvh-58px)] max-[540.001px]:mx-3 max-[540.001px]:pt-10.5",
         mode === "consult" && "pt-13.5",
-        mode === "new" && "justify-center pt-0 max-[1250.001px]:pt-0 max-[800.001px]:pt-0 max-[540.001px]:pt-0",
+        mode === "new" &&
+          "justify-center pt-0 max-[1250.001px]:pt-0 max-[800.001px]:pt-0 max-[540.001px]:pt-0",
       )}
       data-mode={mode}
     >
@@ -90,12 +98,21 @@ export function ChatWorkspace(props: WorkspaceProps) {
         data-visual="customer-transcript"
         className={cn(
           "flex-1 min-h-0 overflow-auto scrollbar-thin pt-4.75 max-[540.001px]:pt-2",
-          mode === "new" && "flex-none pb-6 pt-0 text-center max-[540.001px]:pt-0",
+          mode === "new" &&
+            "flex-none pb-6 pt-0 text-center max-[540.001px]:pt-0",
         )}
       >
-        {error && (
-          <p role="alert" className="text-sm text-red-700">
-            {error}
+        {feedback && (
+          <p
+            role={error || processing?.error ? "alert" : "status"}
+            className={cn(
+              "text-sm",
+              error || processing?.error
+                ? "text-red-700"
+                : "text-muted-foreground",
+            )}
+          >
+            {feedback}
           </p>
         )}
         {mode === "new" ? (
@@ -301,7 +318,11 @@ export function ChatWorkspace(props: WorkspaceProps) {
             required
             disabled={!canReply || pending}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
                 event.preventDefault();
                 event.currentTarget.form?.requestSubmit();
               }

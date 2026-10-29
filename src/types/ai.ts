@@ -1,4 +1,5 @@
-import type { MessageDTO } from "./domain";
+import type { Message, MessageDTO, ConversationContextPatch } from "./domain";
+import type { TicketData, TicketStatus } from "./tickets";
 
 export type AgentIntent =
   | "knowledge"
@@ -29,17 +30,38 @@ export type AgentRun = {
   customerId: string;
   inputHash: string;
   controlVersion: number;
-  state: "running" | "completed" | "failed";
+  state: "running" | "completed" | "failed" | "interrupted";
   createdAt: Date;
   expiresAt: Date;
   completedAt: Date | null;
   response: string | null;
   responseId: string;
+  responseCreatedAt?: Date | null;
+  responseSequence?: number | null;
   errorCode: string | null;
   model: string;
   promptVersion: string;
   audit: AgentAudit[];
   usage: { inputTokens: number; outputTokens: number } | null;
+  contextReferences?: ConversationContextPatch;
+};
+
+export type AgentMemorySnapshot = {
+  initialMessage: Message | null;
+  recentMessages: Message[];
+  selectedTicket: {
+    id: string;
+    title: string;
+    status: TicketStatus;
+    version: number;
+  } | null;
+  pendingOperation: {
+    draftId: string;
+    ticketId: string;
+    operation: "create" | "update" | "reopen" | "handoff";
+    state: "pending" | "expired" | "applied";
+    data: TicketData;
+  } | null;
 };
 
 export type AgentStreamEvent =

@@ -1,6 +1,20 @@
 export type UserRole = "chat" | "agent";
 
 export type ConversationStatus = "waiting" | "active" | "closed";
+export type ConversationOperationalState =
+  | "AGENT_ACTIVE"
+  | "WAITING_FOR_ANALYST"
+  | "ANALYST_ACTIVE"
+  | "CLOSED";
+export type MessageProcessingState =
+  | "processing"
+  | "completed"
+  | "interrupted"
+  | "failed";
+export type ConversationContextPatch = {
+  selectedTicketId?: string | null;
+  pendingDraftId?: string | null;
+};
 
 export type SessionUser = {
   uid: string;
@@ -26,6 +40,8 @@ export type Conversation = {
   aiActiveRunId?: string | null;
   aiControlVersion?: number;
   initialMessageId?: string;
+  selectedTicketId?: string | null;
+  pendingDraftId?: string | null;
 };
 
 export type Message = {
@@ -36,11 +52,17 @@ export type Message = {
   role: UserRole | "assistant";
   text: string;
   createdAt: Date;
+  sequence?: number;
+  runId?: string;
+  processingState?: MessageProcessingState;
+  processingErrorCode?: string | null;
+  decisionRefs?: string[];
 };
 
 export type ConversationDTO = Omit<Conversation, "createdAt" | "updatedAt"> & {
   createdAt: string;
   updatedAt: string;
+  operationalState?: ConversationOperationalState;
 };
 
 export type MessageDTO = Omit<Message, "createdAt"> & { createdAt: string };

@@ -13,6 +13,14 @@ export const AgentTurnSchema = z
 
 export type AgentTurnInput = z.infer<typeof AgentTurnSchema>;
 
+// Internal server-to-repository contract; never included in the HTTP turn body.
+export const ConversationContextPatchSchema = z
+  .object({
+    selectedTicketId: IdSchema.nullable().optional(),
+    pendingDraftId: IdSchema.nullable().optional(),
+  })
+  .strict();
+
 export const IntentSchema = z.enum([
   "knowledge",
   "tickets",

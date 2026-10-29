@@ -237,7 +237,12 @@ export function useConversationWorkspace({
             // a subsequent explicit attempt, never an automatic second run.
             if (
               failure instanceof AgentStreamError &&
-              !["RUN_IN_PROGRESS", "CONFLICT"].includes(failure.code)
+              ![
+                "RUN_IN_PROGRESS",
+                "CONFLICT",
+                "PERSISTENCE_UNAVAILABLE",
+                "STREAM_INTERRUPTED",
+              ].includes(failure.code)
             )
               request.current = null;
             if (!next.startConversation && !createdConversation)

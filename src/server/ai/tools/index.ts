@@ -110,7 +110,11 @@ export function createNexoTools(services: {
           "tickets",
           input.rationale,
           { ticketId: input.ticketId },
-          async () => services.tickets.getTicket(input.ticketId),
+          async (scope) => {
+            const ticket = await services.tickets.getTicket(input.ticketId);
+            await scope.rememberContext({ selectedTicketId: ticket._id });
+            return ticket;
+          },
         ),
     }),
     getTicketStatus: createTool({
@@ -128,8 +132,9 @@ export function createNexoTools(services: {
           "status",
           input.rationale,
           { ticketId: input.ticketId },
-          async () => {
+          async (scope) => {
             const ticket = await services.tickets.getTicket(input.ticketId);
+            await scope.rememberContext({ selectedTicketId: ticket._id });
             return {
               _id: ticket._id,
               number: ticket.number,
@@ -214,6 +219,12 @@ export function createNexoTools(services: {
             const { token: _token, digest: _digest, ...draft } = prepared;
             void _token;
             void _digest;
+            await scope.rememberContext({
+              pendingDraftId: draft.draftId,
+              ...(draft.operation !== "create"
+                ? { selectedTicketId: draft.ticketId }
+                : {}),
+            });
             scope.draftSummary = `Rascunho preparado (${draft.operation}):\n${draft.data.title}\n${draft.data.description}\nTipo: ${draft.data.type} · Categoria: ${draft.data.category} · Prioridade: ${draft.priority}\nImpacto: ${draft.data.impact} · Urgência: ${draft.data.urgency}\nFuncionário afetado: ${draft.affectedEmployee.name}\nNenhum chamado foi criado ou alterado. A operação aguarda confirmação explícita no fluxo autorizado, cuja integração visual será disponibilizada na próxima fase.`;
             return { ...draft, confirmationRequired: true, executed: false };
           },

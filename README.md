@@ -79,6 +79,10 @@ Estados: `waiting` → `active` → `closed`; `active` → `waiting` devolve à 
 
 Leituras iniciais acontecem em Server Components; filtros e paginação usam a URL e consultas no servidor. Listas têm até 20 itens por página; históricos, 50 mensagens. A interface atualiza a cada dez segundos enquanto a aba está visível e exibe mensagens recentes. A busca literal por assunto e nome pode exigir varreduras. Presença, contagem de não lidas e respostas de IA não são simuladas.
 
+## Memória e persistência do agente
+
+Consulte [Fase 4 — Conversas, memória e persistência](docs/fase-4-memoria-persistencia.md) para os contratos, recuperação de interrupções, interpretação do limite de 30 mensagens e testes.
+
 ## Validação
 
 ```sh

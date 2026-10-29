@@ -1,5 +1,6 @@
 import "server-only";
 import { ZodError } from "zod";
+import { MongoError } from "mongodb";
 import type { Result } from "@/types/domain";
 
 export class AppError extends Error {
@@ -8,6 +9,33 @@ export class AppError extends Error {
     message: string,
   ) {
     super(message);
+  }
+}
+
+export async function databaseOperation<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    if (
+      [
+        "MongoNetworkError",
+        "MongoNetworkTimeoutError",
+        "MongoServerSelectionError",
+        "MongoOperationTimeoutError",
+        "MongoWriteConcernError",
+        "MongoPoolClearedError",
+      ].includes(name) ||
+      (error instanceof MongoError &&
+        error.hasErrorLabel("UnknownTransactionCommitResult"))
+    )
+      throw new AppError(
+        "PERSISTENCE_UNAVAILABLE",
+        "Não foi possível acessar o histórico agora. Repita a mesma requisição para verificar o resultado.",
+      );
+    throw error;
   }
 }
 

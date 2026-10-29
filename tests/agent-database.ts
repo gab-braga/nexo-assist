@@ -127,7 +127,12 @@ async function main() {
         .countDocuments({ _id: input.requestId, conversationId: ids[0] }),
       1,
     );
-    assert.equal((await repository.history(ids[0])).length, 2);
+    assert.equal(
+      await db
+        .collection<Message>("messages")
+        .countDocuments({ conversationId: ids[0] }),
+      2,
+    );
     await assert.rejects(() =>
       repository.begin(user, { ...input, requestId: randomUUID() }, "test"),
     );

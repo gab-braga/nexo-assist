@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
 import { startAgentTurn, agentError } from "@/server/services/agent-turns";
 import { readAgentBody, validateAgentRequest } from "@/server/ai/http";
+import { AppError } from "@/server/lib/errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 70;
@@ -17,8 +18,11 @@ export async function POST(request: Request) {
           for await (const event of events) {
             if (!cancellation.signal.aborted) controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
           }
-        } catch {
-          if (!cancellation.signal.aborted) controller.enqueue(encoder.encode(JSON.stringify({ type: "error", code: "AI_UNAVAILABLE", error: "Não foi possível concluir o atendimento. Atualize a conversa para verificar o resultado." }) + "\n"));
+        } catch (error) {
+          const failure = error instanceof AppError ? agentError(error) : {
+            code: "STREAM_INTERRUPTED", error: "Não foi possível concluir o atendimento. Atualize a conversa para verificar o resultado.",
+          };
+          if (!cancellation.signal.aborted) controller.enqueue(encoder.encode(JSON.stringify({ type: "error", ...failure }) + "\n"));
         } finally { if (!cancellation.signal.aborted) controller.close(); }
       },
       cancel() { cancellation.abort(); },

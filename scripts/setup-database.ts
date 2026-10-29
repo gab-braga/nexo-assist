@@ -15,6 +15,7 @@ async function main() {
       ["conversations", { agentId: 1, updatedAt: -1, _id: -1 }],
       ["messages", { _id: 1 }],
       ["messages", { conversationId: 1, createdAt: -1, _id: -1 }],
+      ["messages", { conversationId: 1, sequence: -1, createdAt: -1, _id: -1 }],
       ["conversation_events", { conversationId: 1, createdAt: -1 }],
       ["tickets", { customerId: 1, updatedAt: -1, _id: -1 }],
       ["tickets", { status: 1, updatedAt: -1, _id: -1 }],

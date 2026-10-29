@@ -1,7 +1,6 @@
 import { protectPage } from "@/auth/guards";
 import { ConversationWorkspace } from "./conversation-workspace";
 import {
-  getConversation,
   getMessages,
   listConversations,
 } from "@/server/services/conversations";
@@ -39,16 +38,15 @@ export async function ConversationPage({ role, searchParams }: Props) {
   const before = value(params.before);
 
   const data = await result(async () => {
-    const [list, conversation, history] = await Promise.all([
+    const [list, history] = await Promise.all([
       listConversations({
         search,
         status,
         cursor: cursor(value(params.cursor)),
       }),
-      id ? getConversation(id) : null,
       id ? getMessages({ conversationId: id, cursor: cursor(before) }) : null,
     ]);
-    return { list, conversation, history };
+    return { list, conversation: history?.conversation ?? null, history };
   });
 
   if (!data.ok)

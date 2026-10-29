@@ -24,6 +24,9 @@ import type {
   SessionUser,
 } from "@/types/domain";
 import { IdSchema } from "@/server/schemas/uuid";
+import { conversationState, canProcessAgent } from "@/auth/conversation-state";
+import { agentRunRepository } from "@/server/repositories/agent-runs";
+import { messageHistoryFilter } from "@/server/policies/message-history";
 
 function checkAccess(
   user: SessionUser,
@@ -39,7 +42,21 @@ function serialize(conversation: Conversation): ConversationDTO {
     ...conversation,
     createdAt: conversation.createdAt.toISOString(),
     updatedAt: conversation.updatedAt.toISOString(),
+    operationalState: conversationState(conversation),
   };
+}
+
+async function readConversation(user: SessionUser, id: string) {
+  let conversation = await findConversation(id);
+  checkAccess(user, conversation);
+  if (
+    conversation.aiActiveRunId &&
+    (await agentRunRepository.recover(id, conversation.customerId))
+  ) {
+    conversation = await findConversation(id);
+    checkAccess(user, conversation);
+  }
+  return conversation;
 }
 
 export async function listConversations(input: unknown = {}) {
@@ -84,32 +101,31 @@ export async function listConversations(input: unknown = {}) {
 
 export async function getConversation(input: unknown) {
   const user = await requireUser();
-  const conversation = await findConversation(IdSchema.parse(input));
-  checkAccess(user, conversation);
+  const conversation = await readConversation(user, IdSchema.parse(input));
   return serialize(conversation);
 }
 
 export async function getMessages(input: unknown) {
   const user = await requireUser();
   const query = HistorySchema.parse(input);
-  checkAccess(user, await findConversation(query.conversationId));
-  const filter: Filter<import("@/types/domain").Message> = {
-    conversationId: query.conversationId,
-  };
-  if (query.cursor)
-    filter.$or = [
-      { createdAt: { $lt: new Date(query.cursor.date) } },
-      { createdAt: new Date(query.cursor.date), _id: { $lt: query.cursor.id } },
-    ];
+  const conversation = await readConversation(user, query.conversationId);
+  const filter = messageHistoryFilter(query.conversationId, query.cursor);
   const rows = await findMessages(filter, 51);
   const items: MessageDTO[] = rows
     .slice(0, 50)
     .map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
   const last = items.at(-1);
   return {
+    conversation: serialize(conversation),
     items: items.reverse(),
     nextCursor:
-      rows.length > 50 && last ? { date: last.createdAt, id: last._id } : null,
+      rows.length > 50 && last
+        ? {
+            date: last.createdAt,
+            id: last._id,
+            ...(last.sequence !== undefined ? { sequence: last.sequence } : {}),
+          }
+        : null,
   };
 }
 
@@ -143,6 +159,11 @@ export async function sendMessage(input: unknown) {
       }
       if (conversation.status === "closed")
         throw new AppError("CONFLICT", "Este atendimento foi encerrado.");
+      if (user.role === "chat" && canProcessAgent(conversation))
+        throw new AppError(
+          "INVALID_OPERATION",
+          "Envie a mensagem pelo assistente para preservar o processamento e o limite da sessão.",
+        );
       if (!canSendMessage(user, conversation))
         throw new AppError(
           "FORBIDDEN",
@@ -182,6 +203,7 @@ export async function transitionConversation(input: unknown) {
               : ("waiting" as const),
           agentId: data.operation === "close" ? user.uid : null,
           agentName: data.operation === "close" ? user.name : null,
+          ...(data.operation === "release" ? { aiHandoff: true } : {}),
           updatedAt: now,
         };
   await transitionRecord(filter, update, {

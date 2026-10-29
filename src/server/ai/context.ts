@@ -1,7 +1,11 @@
 import "server-only";
 import { ZodError } from "zod";
 import { AppError } from "@/server/lib/errors";
-import type { SessionUser, Result } from "@/types/domain";
+import type {
+  SessionUser,
+  Result,
+  ConversationContextPatch,
+} from "@/types/domain";
 import type { AgentAudit, AgentIntent } from "@/types/ai";
 
 export class NexoRunContext {
@@ -17,6 +21,9 @@ export class NexoRunContext {
     readonly authenticate: () => Promise<SessionUser>,
     readonly assertActive: () => Promise<void>,
     readonly requestHandoff: (reason: string, summary: string) => Promise<void>,
+    readonly rememberContext: (
+      patch: ConversationContextPatch,
+    ) => Promise<void>,
   ) {}
 }
 
