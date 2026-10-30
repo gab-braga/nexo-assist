@@ -1,13 +1,11 @@
+import nextEnv from "@next/env";
+import { getServiceAccount } from "../src/server/lib/firebase/service-account.mjs";
+nextEnv.loadEnvConfig(process.cwd());
 import { readFile, writeFile } from "node:fs/promises";
 import { createSign } from "node:crypto";
 
 // Read-only discovery. Never print private keys, OAuth tokens or connection secrets.
-const account = JSON.parse(
-  await readFile(
-    process.env.GOOGLE_APPLICATION_CREDENTIALS || "service-account.json",
-    "utf8",
-  ),
-);
+const account = getServiceAccount();
 const encode = (value) =>
   Buffer.from(JSON.stringify(value)).toString("base64url");
 const now = Math.floor(Date.now() / 1000);
@@ -154,7 +152,7 @@ const config = await get(
 const databaseId = db.name.split("/").at(-1);
 const env = {
   FIREBASE_PROJECT_ID: project,
-  GOOGLE_APPLICATION_CREDENTIALS: "./service-account.json",
+  FIREBASE_SERVICE_ACCOUNT: JSON.stringify(account),
   MONGODB_DATABASE: databaseId,
   MONGODB_URI: `mongodb://${db.uid}.${db.locationId}.firestore.goog:443/${databaseId}?loadBalanced=true&tls=true&retryWrites=false&authMechanism=MONGODB-OIDC`,
   NEXT_PUBLIC_FIREBASE_API_KEY: config.apiKey,
@@ -173,7 +171,7 @@ try {
 await writeFile(
   ".env.local",
   Object.entries(env)
-    .map(([key, value]) => `${key}=${value}`)
+    .map(([key, value]) => `${key}='${String(value).replace(/\$/g, "\\$")}'`)
     .join("\n") + "\n",
   { flag: "wx" },
 );

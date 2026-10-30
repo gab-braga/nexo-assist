@@ -1,8 +1,7 @@
 import "server-only";
 import { MongoClient } from "mongodb";
 import { GoogleAuth } from "google-auth-library";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { getServiceAccount } from "./firebase/service-account.mjs";
 
 const state = globalThis as typeof globalThis & {
   nexoMongo?: Promise<MongoClient>;
@@ -18,16 +17,8 @@ export async function database() {
     connection.searchParams.set("tls", "true");
     connection.searchParams.set("retryWrites", "false");
     connection.searchParams.set("authSource", "$external");
-    const keyFile =
-      process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-      resolve("service-account.json");
-
     const auth = new GoogleAuth({
-      ...(process.env.FIREBASE_SERVICE_ACCOUNT_JSON
-        ? { credentials: JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON) }
-        : existsSync(/* turbopackIgnore: true */ keyFile)
-          ? { keyFile }
-          : {}),
+      credentials: getServiceAccount(),
       scopes: ["https://www.googleapis.com/auth/cloud-platform"],
     });
 

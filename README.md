@@ -17,8 +17,7 @@ Se o PowerShell bloquear `npm.ps1`, use `npm.cmd` nos mesmos comandos, sem alter
 | Variável | Responsabilidade |
 | --- | --- |
 | `FIREBASE_PROJECT_ID` | Projeto do servidor |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Caminho local do JSON administrativo, fora do Git e de `public/` |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Alternativa server-only para hospedagem, JSON em uma linha |
+| `FIREBASE_SERVICE_ACCOUNT` | JSON completo da Service Account em uma linha; exclusivo do servidor |
 | `MONGODB_URI`, `MONGODB_DATABASE` | Endpoint/ID do Firestore Enterprise com API MongoDB |
 | `NEXT_PUBLIC_FIREBASE_*` | Configuração pública do aplicativo web, definida antes do build |
 | `OPENAI_API_KEY` | Credencial do modelo, somente no servidor |
@@ -26,7 +25,7 @@ Se o PowerShell bloquear `npm.ps1`, use `npm.cmd` nos mesmos comandos, sem alter
 | `NEXO_DEMO_PASSWORD` | Senha local das contas fictícias, mínimo de 12 caracteres |
 | `TICKET_SERVICE_UNAVAILABLE_UNTIL` | Opcional: instante ISO futuro para simular indisponibilidade |
 
-Não envie chaves pelo chat nem as coloque em variáveis `NEXT_PUBLIC_`. `.env.local` e `service-account.json` são ignorados pelo Git. Sem arquivo/JSON explícito, o servidor aceita Application Default Credentials. O navegador não acessa o banco diretamente.
+Não envie chaves pelo chat nem as coloque em variáveis `NEXT_PUBLIC_`. `.env.local` e `service-account.json` são ignorados pelo Git. Em `.env.local`, coloque o JSON completo em uma linha entre aspas simples, preservando os escapes `\n` da chave privada. Na Vercel, configure `FIREBASE_SERVICE_ACCOUNT` em **Settings → Environment Variables**, com o JSON sem as aspas simples externas, e faça um novo deploy. A variável é obrigatória, sem fallback para arquivo ou Application Default Credentials. O navegador não acessa o banco diretamente.
 
 No Firebase Console, habilite Authentication com E-mail/senha, registre o aplicativo web e autorize o domínio local. O banco precisa ser **Firestore Enterprise com API MongoDB**, não Firestore Standard. A conexão usa TLS, `loadBalanced=true`, `retryWrites=false`, `authSource=$external` e OAuth/OIDC com renovação de tokens.
 

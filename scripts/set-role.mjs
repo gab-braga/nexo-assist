@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { initializeApp, cert, applicationDefault } from "firebase-admin/app";
+import { getServiceAccount } from "../src/server/lib/firebase/service-account.mjs";
+import { initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import nextEnv from "@next/env";
 nextEnv.loadEnvConfig(process.cwd());
@@ -13,23 +13,12 @@ async function main() {
     );
   }
   let credential;
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
-    credential = cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON));
-  else {
-    try {
-      credential = cert(
-        JSON.parse(
-          await readFile(
-            process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-              "service-account.json",
-            "utf8",
-          ),
-        ),
-      );
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-      credential = applicationDefault();
-    }
+  try {
+    credential = cert(getServiceAccount());
+  } catch {
+    throw new Error(
+      "FIREBASE_SERVICE_ACCOUNT is missing or contains invalid service account credentials.",
+    );
   }
   const auth = getAuth(initializeApp({ credential }));
   const user = await auth.getUser(uid);
