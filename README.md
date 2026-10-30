@@ -2,7 +2,16 @@
 
 Assistente de service desk de TI: o funcionário conversa para consultar a central de ajuda, encontrar seus chamados, preparar aberturas, complementar ou reabrir chamados e pedir atendimento humano. O analista recebe o contexto, assume, responde e devolve à IA ou encerra. Ações verificáveis aparecem acima das respostas e permanecem no histórico.
 
-O serviço de chamados é **simulado e persistido**, separado do agente; não integra um legado externo. Firebase Authentication e Firestore Enterprise são reais. As suítes comuns usam um provedor de modelo simulado para evitar chamadas pagas.
+Desenvolvido com Next.js, React, TypeScript, Tailwind CSS e Shadcn UI, com Firebase para autenticação, Firestore para persistência e IA integrada via Mastra e OpenAI. Deploy na Vercel.
+
+# Acesso de teste
+
+| Usuário                  | Senha    |
+| ------------------------ | -------- |
+| cliente1@nexo.com.br     | 12345678 |
+| cliente2@nexo.com.br     | 12345678 |
+| atendimento1@nexo.com.br | 12345678 |
+| atendimento2@nexo.com.br | 12345678 |
 
 ## Execução local
 
@@ -16,16 +25,16 @@ npm ci
 
 Se o PowerShell bloquear `npm.ps1`, use `npm.cmd` nos mesmos comandos, sem alterar a política de execução. Copie `.env.example` para `.env.local`:
 
-| Variável | Responsabilidade |
-| --- | --- |
-| `FIREBASE_PROJECT_ID` | Projeto do servidor |
-| `FIREBASE_SERVICE_ACCOUNT` | JSON completo da Service Account em uma linha; exclusivo do servidor |
-| `MONGODB_URI`, `MONGODB_DATABASE` | Endpoint/ID do Firestore Enterprise com API MongoDB |
-| `NEXT_PUBLIC_FIREBASE_*` | Configuração pública do aplicativo web, definida antes do build |
-| `OPENAI_API_KEY` | Credencial do modelo, somente no servidor |
-| `NEXO_AI_MODEL` | Modelo OpenAI configurável; padrão: `gpt-5.4-mini` |
-| `NEXO_DEMO_PASSWORD` | Senha local das contas fictícias, mínimo de 12 caracteres |
-| `TICKET_SERVICE_UNAVAILABLE_UNTIL` | Opcional: instante ISO futuro para simular indisponibilidade |
+| Variável                           | Responsabilidade                                                     |
+| ---------------------------------- | -------------------------------------------------------------------- |
+| `FIREBASE_PROJECT_ID`              | Projeto do servidor                                                  |
+| `FIREBASE_SERVICE_ACCOUNT`         | JSON completo da Service Account em uma linha; exclusivo do servidor |
+| `MONGODB_URI`, `MONGODB_DATABASE`  | Endpoint/ID do Firestore Enterprise com API MongoDB                  |
+| `NEXT_PUBLIC_FIREBASE_*`           | Configuração pública do aplicativo web, definida antes do build      |
+| `OPENAI_API_KEY`                   | Credencial do modelo, somente no servidor                            |
+| `NEXO_AI_MODEL`                    | Modelo OpenAI configurável; padrão: `gpt-5.4-mini`                   |
+| `NEXO_DEMO_PASSWORD`               | Senha local das contas fictícias, mínimo de 12 caracteres            |
+| `TICKET_SERVICE_UNAVAILABLE_UNTIL` | Opcional: instante ISO futuro para simular indisponibilidade         |
 
 Não envie chaves pelo chat nem as coloque em variáveis `NEXT_PUBLIC_`. `.env.local` e `service-account.json` são ignorados pelo Git. Em `.env.local`, coloque o JSON completo em uma linha entre aspas simples, preservando os escapes `\n` da chave privada. Na Vercel, configure `FIREBASE_SERVICE_ACCOUNT` em **Settings → Environment Variables**, com o JSON sem as aspas simples externas, e faça um novo deploy. A variável é obrigatória, sem fallback para arquivo ou Application Default Credentials. O navegador não acessa o banco diretamente.
 
@@ -44,11 +53,11 @@ npm run dev
 
 Abra `http://localhost:3000`. Não existe cadastro público. O seed prepara:
 
-| Conta fictícia | Role | Destino |
-| --- | --- | --- |
-| `ana@nexo-demo.example.test` | Funcionária | `/chat` |
-| `bruno@nexo-demo.example.test` | Funcionário | `/chat` |
-| `carla@nexo-demo.example.test` | Analista | `/agent` |
+| Conta fictícia                 | Role        | Destino  |
+| ------------------------------ | ----------- | -------- |
+| `ana@nexo-demo.example.test`   | Funcionária | `/chat`  |
+| `bruno@nexo-demo.example.test` | Funcionário | `/chat`  |
+| `carla@nexo-demo.example.test` | Analista    | `/agent` |
 
 Use a senha definida em `NEXO_DEMO_PASSWORD`; não há senha padrão ou senha livre. Reexecuções preservam senhas, claims e documentos. O seed recusa colisões de identidade/proprietário e não adota contas existentes pelo e-mail. São seis artigos, seis chamados variados e quatro conversas fictícias nos estados IA/fila/humano/encerrado. Datas são relativas à **primeira** aplicação; repetir o seed não renova chamados nem reabre atendimentos utilizados.
 
@@ -104,12 +113,12 @@ Limites por execução: seis etapas, oito ferramentas, 2.048 tokens de saída e 
 
 `INC` representa falha; `REQ`, pedido de acesso, equipamento ou software. Categorias: Acesso, Rede e VPN, Hardware, Software, E-mail e Outros. O afetado vem da autenticação.
 
-| Prioridade | Condição considerada | SLA de resposta/atualização |
-| --- | --- | --- |
-| Crítica | Equipe/empresa impedida | 1 hora corrida, 24/7 |
-| Alta | Pessoa impedida ou compromisso no mesmo dia | 4 horas úteis |
-| Média | Existe alternativa | 3 dias úteis |
-| Baixa | Sem urgência | 5 dias úteis |
+| Prioridade | Condição considerada                        | SLA de resposta/atualização |
+| ---------- | ------------------------------------------- | --------------------------- |
+| Crítica    | Equipe/empresa impedida                     | 1 hora corrida, 24/7        |
+| Alta       | Pessoa impedida ou compromisso no mesmo dia | 4 horas úteis               |
+| Média      | Existe alternativa                          | 3 dias úteis                |
+| Baixa      | Sem urgência                                | 5 dias úteis                |
 
 Calendário: segunda a sexta, **08h–18h de São Paulo (UTC−03)**, sem feriados; dia útil de dez horas. O cálculo preserva minutos/milissegundos e atravessa fins de semana. SLA não é promessa de resolução. Abertura/reabertura iniciam prazo. A resposta humana ligada ao chamado selecionado registra atualização do serviço, prazo e histórico com a mensagem. Complementos do funcionário não adiam o SLA; mudança de prioridade recalcula desde a última resposta do serviço. Resolvidos não ficam vencidos.
 

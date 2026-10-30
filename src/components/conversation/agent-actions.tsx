@@ -7,6 +7,13 @@ import {
 } from "lucide-react";
 import type { AgentAction } from "@/lib/schemas/agent-actions";
 import type { Message } from "@/types/domain";
+import { cn } from "@/lib/utils";
+
+type Props = {
+  actions?: AgentAction[];
+  analyst?: boolean;
+  metrics?: Message["observability"];
+};
 
 const stateNames = {
   running: "Em andamento",
@@ -15,11 +22,13 @@ const stateNames = {
   not_started: "Não iniciada",
   unknown: "Resultado desconhecido",
 };
+
 const sources = {
   model: "Interpretação proposta pelo modelo",
   service: "Resultado do serviço",
   rule: "Regra determinística",
 };
+
 function StateIcon({ state }: { state: AgentAction["state"] }) {
   return state === "running" ? (
     <LoaderCircle aria-hidden className="size-3.5 shrink-0 animate-spin" />
@@ -31,22 +40,22 @@ function StateIcon({ state }: { state: AgentAction["state"] }) {
     <CircleHelp aria-hidden className="size-3.5 shrink-0 text-amber-700" />
   );
 }
+
 export function AgentActions({
   actions = [],
   analyst = false,
   metrics,
-}: {
-  actions?: AgentAction[];
-  analyst?: boolean;
-  metrics?: Message["observability"];
-}) {
+}: Props) {
   if (!actions.length && !metrics) return null;
   return (
     <section
       data-visual="agent-actions"
       data-action-message-id={actions[0]?.messageId}
       aria-label="Ações do atendimento"
-      className="mb-2 max-w-150.25 min-w-0 shrink-0 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
+      className={cn(
+        "mb-2 max-w-150.25 min-w-0 shrink-0 rounded-xl border border-border bg-muted/40 p-3 text-xs text-muted-foreground",
+        analyst && "ml-auto self-end",
+      )}
     >
       <p className="mb-2 flex items-center gap-1.5 font-medium">
         <ShieldCheck aria-hidden size={14} />
