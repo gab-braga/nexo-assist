@@ -13,3 +13,7 @@ export const LoginFormSchema = z.object({
 });
 
 export type LoginFormValues = z.infer<typeof LoginFormSchema>;
+
+export const PasswordResetSchema = z.object({ email: EmailSchema });
+
+export type PasswordResetValues = z.infer<typeof PasswordResetSchema>;

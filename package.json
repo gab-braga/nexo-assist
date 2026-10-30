@@ -19,6 +19,7 @@
     "test:final:database": "node --conditions=react-server --import tsx tests/final-validation-database.ts",
     "test:ui": "node tests/interface-check.mjs",
     "test:forms": "node tests/forms-check.mjs",
+    "test:password-reset:ui": "node tests/password-reset-ui.mjs",
     "db:setup": "node --conditions=react-server --import tsx scripts/setup-database.ts",
     "auth:role": "node scripts/set-role.mjs",
     "test:backend": "node --conditions=react-server --import tsx --test tests/backend.test.ts tests/tickets.test.ts",
@@ -63,6 +64,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "server-only": "^0.0.1",
+    "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"
   },
