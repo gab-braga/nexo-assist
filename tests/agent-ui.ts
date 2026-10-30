@@ -282,7 +282,7 @@ async function main() {
       exact: true,
     });
     const newConversation = page.getByRole("button", {
-      name: "Novo atendimento",
+      name: "Nova Conversa",
       exact: true,
     });
     const count = () =>
@@ -486,7 +486,7 @@ async function main() {
       .click();
     const draftCard = page.locator('[data-visual="draft-card"]');
     const confirm = page.getByRole("button", {
-      name: "Confirmar operação",
+      name: "Confirmar Operação",
       exact: true,
     });
     await expect(confirm).toBeEnabled({ timeout: 20000 });

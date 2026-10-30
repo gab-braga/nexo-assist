@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:markdown": "node --import tsx --test tests/markdown.test.tsx",
+    "test:markdown:ui": "node --conditions=react-server --import tsx tests/markdown-ui.ts",
     "test:unit": "node --conditions=react-server --import tsx --test tests/backend.test.ts tests/tickets.test.ts tests/agent.test.ts tests/memory.test.ts tests/flows.test.ts tests/handoff.test.ts tests/transparency.test.ts tests/final-validation.test.ts",
     "test:database:all": "node scripts/verify-integration.mjs database",
     "test:e2e": "node scripts/verify-integration.mjs ui",
@@ -55,6 +57,8 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "^7.91.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"

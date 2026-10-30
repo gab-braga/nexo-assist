@@ -29,6 +29,7 @@ import { logout } from "@/server/actions/auth";
 import { AnalystContext } from "./analyst-context";
 import { canProcessAgent } from "@/auth/conversation-state";
 import { AgentActions } from "./agent-actions";
+import { MarkdownRenderer } from "./markdown-renderer";
 import {
   useConversationWorkspace,
   type WorkspaceProps,
@@ -407,6 +408,10 @@ export function AgentWorkspace(props: WorkspaceProps) {
               <AgentMessage
                 key={message._id}
                 text={message.text}
+                markdown={
+                  message.role === "assistant" &&
+                  message.authorId === "nexo-assist"
+                }
                 time={time(message.createdAt)}
                 from={
                   message.role === "chat"
@@ -648,11 +653,13 @@ export function AgentWorkspace(props: WorkspaceProps) {
 }
 function AgentMessage({
   text,
+  markdown = false,
   time,
   from,
   author,
 }: {
   text: string;
+  markdown?: boolean;
   time: string;
   from: string;
   author: string;
@@ -682,7 +689,7 @@ function AgentMessage({
         data-visual="message-bubble"
         className="flow-root whitespace-pre-wrap wrap-break-word bg-card rounded-[4px_13px_13px_13px] py-2 px-3 text-[14px] shadow-[0_1px_2px_#23304708] group-data-[from=ai]/message:bg-[#e5effb] group-data-[from=ai]/message:rounded-[13px_4px_13px_13px] group-data-[from=ai]/message:min-w-0 group-data-[from=agent]/message:bg-[#e2f3e9] group-data-[from=agent]/message:rounded-[13px_4px_13px_13px] max-[800.001px]:text-[12px] max-[800.001px]:leading-4.75"
       >
-        <span>{text}</span>
+        {markdown ? <MarkdownRenderer content={text} /> : <span>{text}</span>}
         <span
           data-visual="message-time"
           className="inline-flex items-center justify-end gap-1 text-[10px] text-muted-foreground ml-2.5 float-right mt-0.75 [&>svg]:text-[#0088ff] group-data-[from=ai]/message:flex group-data-[from=ai]/message:float-none group-data-[from=ai]/message:mt-0 group-data-[from=ai]/message:leading-4 group-data-[from=agent]/message:flex group-data-[from=agent]/message:float-none group-data-[from=agent]/message:mt-0 group-data-[from=agent]/message:leading-4 group-[[data-from=ai]:nth-child(3)]/message:inline-flex group-[[data-from=ai]:nth-child(3)]/message:float-right group-[[data-from=ai]:nth-child(3)]/message:mt-0.75"

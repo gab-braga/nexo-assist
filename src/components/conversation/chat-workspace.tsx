@@ -14,6 +14,7 @@ import { ConversationFlowPanel } from "./conversation-flow-panel";
 import { TicketCard } from "./ticket-card";
 import { CustomerHistoryDialog } from "./customer-history-dialog";
 import { AgentActions } from "./agent-actions";
+import { MarkdownRenderer } from "./markdown-renderer";
 import {
   useConversationWorkspace,
   type WorkspaceProps,
@@ -309,9 +310,14 @@ export function ChatWorkspace(props: WorkspaceProps) {
                         data-visual="assistant-bubble"
                         className="max-w-150.25 border border-border rounded-[4px_13px_13px_13px] py-3 px-3.75 leading-5.5 [&>strong]:block [&>strong]:mt-2.5 [&>strong]:mb-2 [&>strong]:font-semibold group-data-[mode=new]/chat:py-2.5 max-[800.001px]:text-[13px] max-[540.001px]:p-2.5 max-[540.001px]:text-[12px] max-[540.001px]:leading-5"
                       >
-                        <p className="whitespace-pre-wrap wrap-break-word">
-                          {message.text}
-                        </p>
+                        {message.role === "assistant" &&
+                        message.authorId === "nexo-assist" ? (
+                          <MarkdownRenderer content={message.text} />
+                        ) : (
+                          <p className="whitespace-pre-wrap wrap-break-word">
+                            {message.text}
+                          </p>
+                        )}
                         {message.ticket && (
                           <TicketCard ticket={message.ticket} />
                         )}

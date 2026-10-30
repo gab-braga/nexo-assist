@@ -118,6 +118,8 @@ Handoff ocorre por solicitação, criticidade, vencimento ou incerteza. A IA pau
 
 ## Transparência, segurança e falhas
 
+Respostas com autoria `nexo-assist` e role `assistant` renderizam Markdown no chat e no console com `react-markdown` e `remark-gfm`, inclusive durante streaming e após recuperar o histórico. O conteúdo original continua no banco. Mensagens do funcionário, do analista e avisos de sistema permanecem como texto simples. Tabelas/código usam rolagem interna e cores do tema, sem HTML bruto ou carregamento de imagens externas. Valide com `npm run test:markdown` e, com servidor local na porta 3100, `npm run test:markdown:ui`.
+
 `agent_runs.audit` registra início/resultado de ferramentas, UUID, sequência, duração e fatos limitados. Ações aparecem acima da resposta e têm detalhes expansíveis; o console acrescenta métricas permitidas. Interpretações do modelo, regras e resultados têm origens distintas. Confirmação e handoff vêm dos recibos existentes. Não há justificativa posterior gerada por LLM nem exposição de chain-of-thought.
 
 Falha ao registrar o início impede a ferramenta. Resultado não confirmável aparece como **desconhecido**, nunca sucesso presumido. Quedas/expiração preservam histórico e não repetem escritas automaticamente. Reenvios incertos mantêm IDs para consultar o mesmo resultado. Falha de leitura da auditoria preserva mensagens com aviso.
