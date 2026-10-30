@@ -6,7 +6,7 @@ O serviço de chamados é **simulado e persistido**, separado do agente; não in
 
 ## Execução local
 
-O deploy na Vercel usa Node.js 22, a partir de 22.23.1, conforme `engines.node` no `package.json`. Mantenha o suporte `require(esm)` habilitado: o Firebase Admin depende dele para carregar `jose` por meio de `jwks-rsa`. Não configure `--no-experimental-require-module` em `NODE_OPTIONS`. Após alterar a versão do runtime, faça um novo deploy para aplicá-la às funções.
+O deploy na Vercel usa Node.js 22, a partir de 22.23.1, conforme `engines.node` no `package.json`. O Firebase Admin depende de `require(esm)` para carregar `jose` por meio de `jwks-rsa`, mas a Vercel desabilita esse recurso por padrão, mesmo com Node.js 22. Em **Settings → Environment Variables**, defina `NODE_OPTIONS` com o valor `--experimental-require-module` nos ambientes usados (Production e Preview, se aplicável) e faça um novo deploy. Se já houver outras opções em `NODE_OPTIONS`, preserve-as e acrescente essa flag, removendo `--no-experimental-require-module` caso exista. Alterar apenas a versão do Node ou definir essa variável no script de build não habilita o recurso nas funções. Veja a [documentação da Vercel](https://vercel.com/docs/functions/runtimes/node-js/advanced-node-configuration#experimental-node.js-require-of-es-module).
 
 Ambiente validado: Node.js **22.23.1**, npm **12.0.2** e Chrome para os testes de navegador. `.nvmrc` registra o Node utilizado. Use um projeto Firebase de desenvolvimento/demonstração; não execute seed ou testes em produção.
 
