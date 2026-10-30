@@ -88,14 +88,11 @@ export function ChatWorkspace(props: WorkspaceProps) {
         data-visual="chat-tools"
         className="absolute top-4 right-0 flex flex-wrap justify-end max-w-full gap-x-3 gap-y-1 text-muted-foreground text-2.75 opacity-0 transition-opacity duration-200 group-hover/chat:opacity-100 focus-within:opacity-100 [&>button]:flex [&>button]:items-center [&>button]:gap-0.75 max-[800.001px]:opacity-100 max-[800.001px]:top-3"
       >
-        <button
-          onClick={() => {
-            newConversation();
-          }}
-        >
+        <Button variant="outline" onClick={newConversation}>
           <Plus size={13} />
-          Novo atendimento
-        </button>
+          Nova Conversa
+        </Button>
+
         <CustomerHistoryDialog
           select={(id) =>
             navigate(
@@ -109,21 +106,24 @@ export function ChatWorkspace(props: WorkspaceProps) {
             )
           }
         />
+
         {conversation && canProcessAgent(conversation) && (
-          <button
+          <Button
+            variant="outline"
             disabled={humanPending}
             aria-label="Solicitar atendimento humano"
             onClick={requestHuman}
           >
             <Headset size={13} />
-            {humanPending ? "Encaminhando…" : "Atendimento humano"}
-          </button>
+            {humanPending ? "Encaminhando…" : "Atendimento Humano"}
+          </Button>
         )}
       </div>
+
       <div
         data-visual="customer-transcript"
         className={cn(
-          "flex-1 min-h-0 overflow-auto scrollbar-thin pt-4.75 max-[540.001px]:pt-2",
+          "flex-1 min-h-0 overflow-auto scrollbar-thin pt-4.75",
           mode === "new" &&
             "flex-none pb-6 pt-0 text-center max-[540.001px]:pt-0",
         )}
@@ -341,6 +341,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
           </>
         )}
       </div>
+
       <form
         data-visual="customer-composer"
         className="pb-4 bg-card [&>div]:flex [&>div]:items-center [&>div]:p-1.25 [&>div]:border [&>div]:border-[#dfe2e7] [&>div]:rounded-[13px] [&>div]:min-h-12.25 [&_textarea]:flex-1 [&_textarea]:min-w-0 [&_textarea]:py-1.75 [&_textarea]:px-2.5 [&_textarea]:text-[14px] [&_textarea]:placeholder:text-muted-foreground [&>small]:block [&>small]:text-right [&>small]:mt-1 max-[540.001px]:[&_textarea]:text-[12px] max-[540.001px]:[&_textarea]:pl-1.5 max-[540.001px]:[&_button]:text-[12px] max-[540.001px]:[&_button]:px-2.25 max-[540.001px]:[&>small]:text-[10px]"
@@ -351,7 +352,7 @@ export function ChatWorkspace(props: WorkspaceProps) {
         <div>
           <textarea
             rows={1}
-            className="max-h-40 resize-none bg-transparent outline-none [field-sizing:content]"
+            className="max-h-40 resize-none bg-transparent outline-none field-sizing-content"
             id="chat-input"
             aria-label="Mensagem"
             placeholder="Escreva para o Nexo..."
@@ -378,9 +379,10 @@ export function ChatWorkspace(props: WorkspaceProps) {
             type="submit"
             aria-label="Enviar mensagem"
             disabled={pending || !canReply || !text.trim()}
+            className="self-end"
           >
-            <ArrowUp />
             {pending ? "Enviando…" : "Enviar"}
+            <ArrowUp />
           </Button>
         </div>
         {messageForm.formState.errors.text && (

@@ -16,7 +16,7 @@ export function Avatar({
       data-visual="menu-anchor"
       data-slot="avatar"
       className={cn(
-        "relative inline-flex items-center justify-center shrink-0 size-10.5 rounded-full font-semibold text-[14px] bg-[#deedfc] text-primary",
+        "relative inline-flex items-center justify-center shrink-0 size-10.5 rounded-full font-semibold text-[14px] bg-[#deedfc] text-primary uppercase",
         tone === "orange" && "bg-[#f7e2d0] text-[#a9510a]",
         tone === "purple" && "bg-[#e6dff8] text-[#6c3be5]",
         tone === "green" && "bg-[#dcefe5] text-[#168251]",

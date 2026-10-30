@@ -8,6 +8,7 @@ import { ChevronRight, LogOut, MessageSquare, UserRound } from "lucide-react";
 import { Avatar } from "./avatar";
 import type { SessionUser } from "@/types/domain";
 import { logout } from "@/server/actions/auth";
+import { Button } from "./ui/button";
 
 type Props = {
   children: React.ReactNode;
@@ -36,7 +37,9 @@ export function Shell({ children, user }: Props) {
             height={20}
             alt="Nexo Assistant"
           />
-          <span className="text-lg font-bold text-nowrap">Nexo Assist</span>
+          <span className="text-lg font-bold text-nowrap max-sm:hidden">
+            Nexo Assist
+          </span>
         </div>
 
         <nav>
@@ -79,14 +82,11 @@ export function Shell({ children, user }: Props) {
               </small>
             </div>
           </div>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="mt-3 flex cursor-pointer items-center gap-2.75 text-[13px] text-[#344156] focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-3"
-            >
+          <form action={logout} className="mt-3">
+            <Button type="submit" variant="ghost">
               <LogOut size={16} />
-              Sair
-            </button>
+              <span className="max-sm:hidden">Sair</span>
+            </Button>
           </form>
         </div>
       </aside>

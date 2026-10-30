@@ -21,6 +21,7 @@ const labels: Record<string, [string, string]> = {
   cancelPendingOperation: ["TOOL_EXECUTION", "Cancelamento da proposta"],
   requestHumanHandoff: ["TOOL_EXECUTION", "Solicitação de atendimento humano"],
 };
+
 export function safeActionText(value: string, max = 180) {
   return value
     .replace(
@@ -33,11 +34,13 @@ export function safeActionText(value: string, max = 180) {
     .replace(/\b[A-Za-z0-9_-]{60,}\b/g, "[omitido]")
     .slice(0, max);
 }
+
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
+
 const enums: Record<string, string[]> = {
   impact: ["person", "team", "company"],
   urgency: ["blocked", "today", "workaround", "normal"],
@@ -63,6 +66,7 @@ const enums: Record<string, string[]> = {
   ],
   source: ["model_inference"],
 };
+
 export function safeAuditParameters(
   input: AgentAudit["parameters"],
 ): AgentAudit["parameters"] {
@@ -78,6 +82,7 @@ export function safeAuditParameters(
     ),
   );
 }
+
 export function operationalRationale(tool: string) {
   return labels[tool]?.[1] ?? "Execução de ferramenta do atendimento";
 }
@@ -162,6 +167,7 @@ export function actionFacts(tool: string, data: unknown): AgentAudit["facts"] {
   }
   return facts;
 }
+
 export function priorityExplanation(
   priority: string,
   impact?: string,

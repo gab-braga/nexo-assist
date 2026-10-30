@@ -82,6 +82,7 @@ export const TicketListSchema = z
 export const AdminTicketListSchema = TicketListSchema.extend({
   customerId: z.string().min(1).max(128).optional(),
 });
+
 export const ResolveTicketSchema = z
   .object({
     ticketId: IdSchema,
@@ -89,6 +90,7 @@ export const ResolveTicketSchema = z
     reason: z.string().trim().min(3).max(2000),
   })
   .strict();
+
 export const KnowledgeQuerySchema = z
   .object({ search: z.string().trim().max(160).default("") })
   .strict();

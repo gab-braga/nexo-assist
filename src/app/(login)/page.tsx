@@ -31,7 +31,9 @@ export default async function LoginPage() {
             height={24}
             alt="Nexo Assistant"
           />
-          <span className="text-lg font-bold text-nowrap">Nexo Assist</span>
+          <span className="text-lg font-bold text-nowrap max-sm:hidden">
+            Nexo Assist
+          </span>
         </div>
         <div
           data-visual="story-content"

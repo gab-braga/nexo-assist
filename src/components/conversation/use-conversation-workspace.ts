@@ -215,7 +215,7 @@ export function useConversationWorkspace({
           authorId: "nexo-assist",
           authorName: "Nexo Assist",
           role: "assistant",
-          text: "Processando sua mensagem…",
+          text: "Aguarde um momento…",
           createdAt: timestamp,
         },
       ]);

@@ -17,6 +17,7 @@ const stopWords = new Set([
   "por",
   "favor",
 ]);
+
 const related = [
   ["vpn", "conexao remota", "rede privada", "acesso remoto"],
   ["senha", "password"],

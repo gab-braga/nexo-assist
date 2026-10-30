@@ -14,6 +14,11 @@ type HistoryPage = Awaited<
     typeof import("@/server/services/conversations").listCustomerHistory
   >
 >;
+
+type Props = {
+  select: (id: string) => void;
+};
+
 const states: Record<
   ConversationOperationalState,
   { label: string; color: string }
@@ -23,6 +28,7 @@ const states: Record<
   ANALYST_ACTIVE: { label: "Em atendimento humano", color: "green" },
   CLOSED: { label: "Encerrado", color: "gray" },
 };
+
 const date = (value: string) =>
   new Date(value).toLocaleString("pt-BR", {
     dateStyle: "short",
@@ -30,11 +36,7 @@ const date = (value: string) =>
     timeZone: "America/Sao_Paulo",
   });
 
-export function CustomerHistoryDialog({
-  select,
-}: {
-  select: (id: string) => void;
-}) {
+export function CustomerHistoryDialog({ select }: Props) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<HistoryPage["items"]>([]);
   const [cursor, setCursor] = useState<HistoryPage["nextCursor"]>(null);
@@ -81,6 +83,7 @@ export function CustomerHistoryDialog({
       }
     }
   }
+
   function changeOpen(next: boolean) {
     generation.current++;
     fetching.current = false;
@@ -91,16 +94,17 @@ export function CustomerHistoryDialog({
       void load(null);
     }
   }
+
   return (
     <Dialog
       open={open}
       onOpenChange={changeOpen}
-      title="Meus atendimentos"
+      title="Conversas Recentes"
       trigger={
-        <button type="button">
+        <Button variant="outline" type="button">
           <History size={13} />
-          Meus atendimentos
-        </button>
+          Recentes
+        </Button>
       }
     >
       <p className="mb-4 text-sm text-muted-foreground">

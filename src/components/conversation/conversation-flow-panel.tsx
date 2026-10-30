@@ -173,7 +173,7 @@ export function ConversationFlowPanel({
               onClick={() => act(true)}
             >
               <Check size={14} />
-              {pending ? "Verificando…" : "Confirmar operação"}
+              {pending ? "Verificando…" : "Confirmar Operação"}
             </Button>
             <Button
               type="button"

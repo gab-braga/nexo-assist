@@ -10,12 +10,14 @@ import { conversationState } from "@/auth/conversation-state";
 
 export const handoffNotice =
   "Sua conversa foi encaminhada à fila de atendimento humano. O Nexo Assist está pausado enquanto você aguarda um analista.";
+
 export const handoffReasonNames = {
   requested: "Solicitação do funcionário",
   critical: "Incidente crítico",
   overdue: "Prazo de resposta vencido",
   uncertain: "Necessidade de análise humana",
 };
+
 export function summaryText(text: string, max = 500) {
   return text
     .replace(
@@ -24,6 +26,7 @@ export function summaryText(text: string, max = 500) {
     )
     .slice(0, max);
 }
+
 export function buildHandoffSummary(
   conversation: Conversation,
   note: string,
@@ -73,6 +76,7 @@ export function buildHandoffSummary(
 }
 
 export type AnalystOperation = "assume" | "release" | "return_to_ai" | "close";
+
 export function analystTransition(
   user: SessionUser,
   conversation: Conversation,

@@ -21,6 +21,7 @@ type ConversationEvent = {
   reason?: string;
   createdAt: Date;
 };
+
 const handoffReasons: Record<string, string> = {
   requested: "O atendimento humano foi solicitado explicitamente.",
   critical:

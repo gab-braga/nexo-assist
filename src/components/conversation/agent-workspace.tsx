@@ -139,13 +139,14 @@ export function AgentWorkspace(props: WorkspaceProps) {
         >
           <Avatar initials={initials(user.name)} />
           <form action={logout}>
-            <button
+            <Button
+              variant="ghost"
               aria-label="Sair"
               title="Sair"
               className="mt-3 cursor-pointer"
             >
               <LogOut size={16} />
-            </button>
+            </Button>
           </form>
         </div>
       </aside>
@@ -594,9 +595,9 @@ export function AgentWorkspace(props: WorkspaceProps) {
               ))}
           </div>
           <Button
-            data-visual="all-tickets"
-            className="mt-auto mx-3.75 mb-3.75 text-[13px] text-[#344156]"
             variant="outline"
+            data-visual="all-tickets"
+            className="shrink-0 mt-auto mx-3.75 mb-3.75 text-[13px] text-[#344156]"
             onClick={() => setAll(true)}
           >
             Ver todos os atendimentos <ArrowUpRight />
